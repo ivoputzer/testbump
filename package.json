@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "node --test",
+    "testbump": "node $npm_package_bin_testbump",
     "bump": "npm version $(node $npm_package_bin_testbump)"
   },
   "license": "WTFNMFPL",
