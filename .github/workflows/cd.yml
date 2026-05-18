@@ -1,5 +1,6 @@
 name: CD / Auto-Publish
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -16,15 +17,34 @@ jobs:
         with:
           persist-credentials: true
           fetch-depth: 0 # required for bump to work
+
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: lts/*
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
+
       - run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-      - run: npm run test
-      - run: npm run bump
-      - run: git push --follow-tags
-      - run: npm publish --provenance --access public
+
+      - run: npm run test -- --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=lcov.info
+
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - uses: coverallsapp/github-action@v2
+        with:
+          file: lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: github.ref == 'refs/heads/main'
+        run: npm run bump
+
+      - if: github.ref == 'refs/heads/main'
+        run: git push --follow-tags
+
+      - if: github.ref == 'refs/heads/main'
+        run: npm publish --provenance --access public
