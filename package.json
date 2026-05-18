@@ -13,7 +13,6 @@
     "testbump": "node $npm_package_bin_testbump",
     "bump": "npm version $(node $npm_package_bin_testbump)"
   },
-  "dependencies": {},
   "engines": {
     "node": ">=22.3.0"
   },
