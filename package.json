@@ -5,8 +5,12 @@
   "version": "0.0.0-draft",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "testbump": "./bin/testbump.js"
+  },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "bump": "npm version $(node $npm_package_bin_testbump)"
   },
   "license": "WTFNMFPL",
   "homepage": "https://github.com/ivoputzer/testbump#readme",
