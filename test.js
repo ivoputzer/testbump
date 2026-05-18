@@ -1,12 +1,12 @@
 import { test } from 'node:test'
-import assert from 'node:assert'
+import { equal, match, deepEqual } from 'node:assert/strict'
 import { execSync } from 'node:child_process'
 import { runCommand, extractTestFilesFromJUnit, categorizeFiles, calculateTDB } from './index.js'
 
 test('runCommand returns pass: true for successful commands', () => {
   const result = runCommand('echo "hello"', execSync)
-  assert.strictEqual(result.pass, true)
-  assert.match(result.stdout, /hello/)
+  equal(result.pass, true)
+  match(result.stdout, /hello/)
 })
 
 test('extractTestFilesFromJUnit correctly parses test paths', () => {
@@ -15,7 +15,7 @@ test('extractTestFilesFromJUnit correctly parses test paths', () => {
     <testcase name="test2" file="/Users/dev/testbump/lib/other.test.js"/>
   `
   const files = extractTestFilesFromJUnit(mockXml, '/Users/dev/testbump')
-  assert.deepStrictEqual(files, ['test.js', 'lib/other.test.js'])
+  deepEqual(files, ['test.js', 'lib/other.test.js'])
 })
 
 test('categorizeFiles separates source from tests', () => {
@@ -23,13 +23,12 @@ test('categorizeFiles separates source from tests', () => {
   const testFiles = ['test.js']
 
   const result = categorizeFiles(allFiles, testFiles)
-  assert.deepStrictEqual(result.testFiles, ['test.js'])
-  // package.json is ignored automatically
-  assert.deepStrictEqual(result.sourceFiles, ['index.js', 'README.md'])
+  deepEqual(result.testFiles, ['test.js'])
+  deepEqual(result.sourceFiles, ['index.js', 'README.md'])
 })
 
 test('calculateTDB processes the matrix correctly', () => {
-  assert.strictEqual(calculateTDB({ testOldOnNewPass: false, testNewOnOldPass: true }), 'major')
-  assert.strictEqual(calculateTDB({ testOldOnNewPass: true, testNewOnOldPass: false }), 'minor')
-  assert.strictEqual(calculateTDB({ testOldOnNewPass: true, testNewOnOldPass: true }), 'patch')
+  equal(calculateTDB({ testOldOnNewPass: false, testNewOnOldPass: true }), 'major')
+  equal(calculateTDB({ testOldOnNewPass: true, testNewOnOldPass: false }), 'minor')
+  equal(calculateTDB({ testOldOnNewPass: true, testNewOnOldPass: true }), 'patch')
 })

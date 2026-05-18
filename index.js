@@ -11,9 +11,8 @@ export const runCommand = (cmd, execSync, cwd = process.cwd()) => {
 
 // Use the JUnit trick to natively extract test files
 export const extractTestFilesFromJUnit = (junitXml, cwd) => {
-  const matches = [...junitXml.matchAll(/file="([^"]+)"/g)]
-  return matches
-    .map(match => match[1])
+  return [...junitXml.matchAll(/file="([^"]+)"/g)]
+    .map(([,match]) => match)
     .map(absPath => relative(cwd, absPath)) // Convert to relative paths
     .filter((v, i, a) => a.indexOf(v) === i) // Unique values only
 }
