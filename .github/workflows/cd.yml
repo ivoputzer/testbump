@@ -1,0 +1,30 @@
+name: CD / Auto-Publish
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write # required for provenance signing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+          fetch-depth: 0 # required for bump to work
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+      - run: npm run test
+      - run: npm run bump
+      - run: git push --follow-tags
+      - run: npm publish --provenance --access public
