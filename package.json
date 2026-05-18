@@ -1,11 +1,20 @@
 {
   "name": "testbump",
   "description": "The tool that will tell you if you broke your own contract.",
+  "author": "Ivo von Putzer Reibegg <ivo.putzer@gmail.com> (https://github.com/ivoputzer)",
   "version": "0.0.0-draft",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "node --test"
   },
-  "license": "WTFNMFPL"
+  "license": "WTFNMFPL",
+  "homepage": "https://github.com/ivoputzer/testbump#readme",
+  "bugs": {
+    "url": "https://github.com/ivoputzer/testbump/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivoputzer/testbump.git"
+  }
 }
