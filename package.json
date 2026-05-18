@@ -1,0 +1,11 @@
+{
+  "name": "testbump",
+  "description": "The tool that will tell you if you broke your own contract.",
+  "version": "0.0.0-draft",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "WTFNMFPL"
+}
