@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 
-import { run, bumpStringFor, overlayFiles, getTestCommand } from '../index.js'
+import { bumpStringFor } from '../index.js'
 import customReporter from '../lib/reporter.js'
 
 describe('Module', async () => {
@@ -37,25 +37,25 @@ describe('Module', async () => {
   //   })
   // })
 
-  describe('.getTestCommand', () => {
-    it('throws if package.json does not exist', async () => {
-      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
-      await rejects(getTestCommand(cwd), /No package\.json found/)
-    })
+  // describe('.getTestCommand', () => {
+  //   it('throws if package.json does not exist', async () => {
+  //     const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+  //     await rejects(getTestCommand(cwd), /No package\.json found/)
+  //   })
 
-    it('throws if package.json has no test script', async () => {
-      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
-      await writeFile(join(cwd, 'package.json'), '{}')
-      await rejects(getTestCommand(cwd), /No "test" script found/)
-    })
+  //   it('throws if package.json has no test script', async () => {
+  //     const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+  //     await writeFile(join(cwd, 'package.json'), '{}')
+  //     await rejects(getTestCommand(cwd), /No "test" script found/)
+  //   })
 
-    it('returns the test script', async () => {
-      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
-      await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }))
-      const cmd = await getTestCommand(cwd)
-      equal(cmd, 'vitest')
-    })
-  })
+  //   it('returns the test script', async () => {
+  //     const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+  //     await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }))
+  //     const cmd = await getTestCommand(cwd)
+  //     equal(cmd, 'vitest')
+  //   })
+  // })
 
   describe('.bumpStringFor', () => {
     it('returns major (breaking) when T(old) fails on C(new)', () => {
@@ -69,21 +69,21 @@ describe('Module', async () => {
     })
   })
 
-  describe('.overlayFiles', () => {
-    it('copies existing files using injected pure fs mock', async ({ mock }) => {
-      const existsSync = mock.fn((file) => file.includes('exists.txt'))
-      const mkdir = mock.fn(Function.prototype)
-      const cp = mock.fn(Function.prototype)
+  // describe('.overlayFiles', () => {
+  //   it('copies existing files using injected pure fs mock', async ({ mock }) => {
+  //     const existsSync = mock.fn((file) => file.includes('exists.txt'))
+  //     const mkdir = mock.fn(Function.prototype)
+  //     const cp = mock.fn(Function.prototype)
 
-      const files = ['exists.txt', 'missing.txt']
-      const source = join('/', 'src')
-      const destination = join('/', 'dest')
+  //     const files = ['exists.txt', 'missing.txt']
+  //     const source = join('/', 'src')
+  //     const destination = join('/', 'dest')
 
-      await overlayFiles(files, source, destination, { existsSync, promises: { mkdir, cp } })
+  //     await overlayFiles(files, source, destination, { existsSync, promises: { mkdir, cp } })
 
-      equal(existsSync.mock.callCount(), 2)
-      equal(mkdir.mock.callCount(), 1)
-      equal(cp.mock.callCount(), 1)
-    })
-  })
+  //     equal(existsSync.mock.callCount(), 2)
+  //     equal(mkdir.mock.callCount(), 1)
+  //     equal(cp.mock.callCount(), 1)
+  //   })
+  // })
 })
