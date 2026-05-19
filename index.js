@@ -51,7 +51,7 @@ export async function overlayFiles (files, source, destination, { existsSync, pr
 }
 
 export const bump = async (cwd) => {
-  const worktree = join(cwd, '.testbump-worktree')
+  const worktree = join(cwd, '.bump-worktree')
   const teardown = () => {
     if (existsSync(worktree)) {
       try {
