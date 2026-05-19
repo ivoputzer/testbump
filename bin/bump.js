@@ -67,9 +67,14 @@ if (values.init) {
   }
 }
 
+const logger = {
+  info: (...args) => values.verbose && console.error(...args),
+  error: (...args) => values.verbose && console.error(...args)
+}
+
 try {
   const bumpStr = await bump(cwd(), {
-    verbose: values.verbose,
+    logger,
     globs: positionals
   })
 

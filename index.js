@@ -9,16 +9,13 @@ import { createWorkspace } from './src/workspace.js'
 import { run } from './src/exec.js'
 import { evaluateMatrix, calculateSemanticBump } from './src/contract.js'
 
-const createLogger = (verbose) => ({
-  info: (...args) => { if (verbose) console.error(...args) },
-  error: (...args) => { if (verbose) console.error(...args) }
-})
+const noopLogger = { info: () => {}, error: () => {} }
 
 export const bump = async (cwd, options = {}) => {
   // 1. Setup Adapters locally! No prop drilling.
   const git = createGit(cwd, { run, execSync })
   const workspace = createWorkspace(cwd, { fs, fsPromises: fs.promises, run })
-  const logger = createLogger(options.verbose)
+  const logger = options?.logger ?? noopLogger // createLogger(options.verbose)
 
   const worktree = join(cwd, '.bump-worktree')
   const resultsPath = join(cwd, '.testbump-files.json')
