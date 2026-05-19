@@ -26,7 +26,7 @@ try {
   exit(1)
 }
 
-const { values } = args
+const { values, positionals } = args
 
 if (values.help) {
   console.log(`
@@ -63,7 +63,11 @@ if (values.init) {
 }
 
 try {
-  const bumpStr = await bump(cwd(), { verbose: values.verbose })
+  // FIXED Regression 1: Keep verbose decoupled from dry-run
+  const bumpStr = await bump(cwd(), {
+    verbose: values.verbose,
+    globs: positionals
+  })
 
   if (values['dry-run']) {
     console.log(`[testbump] Dry run complete. Would bump: ${bumpStr} (aborting...)`)

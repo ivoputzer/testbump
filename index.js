@@ -21,14 +21,22 @@ export const run = (command, cwd) => {
 export const getTestCommand = async (cwd) => {
   const pkgPath = join(cwd, 'package.json')
   if (!existsSync(pkgPath)) throw new Error('No package.json found.')
+
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   if (!pkg.scripts?.test) throw new Error('No "test" script found in package.json.')
+
   return pkg.scripts.test
 }
 
-export const discoverTestFiles = async (testCmd, cwd, resultsPath) => {
+export const discoverTestFiles = async (testCmd, cwd, resultsPath, globs = []) => {
   const reporterPath = fileURLToPath(new URL('./lib/reporter.js', import.meta.url))
-  await run(`${testCmd} --test-reporter="${reporterPath}" --test-reporter-destination="${resultsPath}"`, cwd)
+
+  let cmd = `${testCmd} --test-reporter="${reporterPath}" --test-reporter-destination="${resultsPath}"`
+  if (globs.length > 0) {
+    cmd += ' ' + globs.map(g => `"${g}"`).join(' ')
+  }
+
+  await run(cmd, cwd)
 
   if (!existsSync(resultsPath)) {
     throw new Error('No test files discovered! Testbump requires at least one test file to form a contract.')
@@ -71,7 +79,6 @@ export const bump = async (cwd, options = {}) => {
   const worktree = join(cwd, '.bump-worktree')
   const resultsPath = join(cwd, '.testbump-files.json')
 
-  // Renamed options.dryRun to options.verbose
   const log = (...args) => { if (options.verbose) console.error(...args) }
 
   const teardown = () => {
@@ -89,10 +96,16 @@ export const bump = async (cwd, options = {}) => {
 
   try {
     log('[testbump] Execution initiated. Extracting context...')
-    const testCmd = await getTestCommand(cwd)
-    log(`[testbump] Executing test script: \`${testCmd}\``)
 
-    const testFiles = await discoverTestFiles(testCmd, cwd, resultsPath)
+    const testCmd = await getTestCommand(cwd)
+    const globs = options.globs || []
+
+    // Command used for actual scenarios Matrix runs
+    const runCmd = globs.length > 0 ? `${testCmd} ` + globs.map(g => `"${g}"`).join(' ') : testCmd
+
+    log(`[testbump] Executing test script: \`${runCmd}\``)
+
+    const testFiles = await discoverTestFiles(testCmd, cwd, resultsPath, globs)
     log(`[testbump] Discovered ${testFiles.length} test file(s) forming the contract.`)
 
     const gitFilesResult = await run('git ls-files', cwd)
@@ -112,7 +125,7 @@ export const bump = async (cwd, options = {}) => {
 
     log('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
     await overlayFiles(sourceFiles, cwd, worktree)
-    const testOldOnNew = await run(testCmd, worktree)
+    const testOldOnNew = await run(runCmd, worktree)
     log(`[testbump] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
     if (options.verbose && !testOldOnNew.pass) log(testOldOnNew.stdout || testOldOnNew.stderr)
 
@@ -120,7 +133,7 @@ export const bump = async (cwd, options = {}) => {
 
     log('\n[testbump] --- SCENARIO B: T(new) on C(old) ---')
     await overlayFiles(testFiles, cwd, worktree)
-    const testNewOnOld = await run(testCmd, worktree)
+    const testNewOnOld = await run(runCmd, worktree)
     log(`[testbump] Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
     if (options.verbose && !testNewOnOld.pass) log(testNewOnOld.stdout || testNewOnOld.stderr)
 

@@ -259,3 +259,36 @@ describe('Integration E2E (cli)', async () => {
     })
   })
 })
+
+describe('Integration E2E (custom scopes)', async () => {
+  it('scopes matrix to specific test files when positional arguments are provided', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'testbump-scopes-'))
+    const env = getCleanEnv()
+
+    await execAsync('git init', { cwd })
+    await execAsync('git config user.email "test@bump.local"', { cwd })
+    await execAsync('git config user.name "test"', { cwd })
+
+    await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }))
+
+    // Create Baseline Code with 2 discrete features and tests
+    await writeFile(join(cwd, 'index.js'), 'export const a = 1;\nexport const b = 2;')
+    await writeFile(join(cwd, 'a.test.js'), 'import {test} from "node:test"; import assert from "node:assert"; import {a} from "./index.js"; test("a", () => assert.equal(a, 1));')
+    await writeFile(join(cwd, 'b.test.js'), 'import {test} from "node:test"; import assert from "node:assert"; import {b} from "./index.js"; test("b", () => assert.equal(b, 2));')
+
+    await execAsync('git add . && git commit -m "init" && git tag v1.0.0 -m "1.0.0"', { cwd })
+
+    // BREAK THE CONTRACT for feature 'b' on the new HEAD
+    await writeFile(join(cwd, 'index.js'), 'export const a = 1;\nexport const b = 3; // broken logic')
+
+    // If we run normal testbump, it should detect 'b' breaking and return MAJOR
+    const { stdout: outMajor } = await execAsync(`node "${bump}"`, { cwd, env })
+    equal(outMajor.trim(), 'major')
+
+    // But if we artificially scope it ONLY to test 'a', it ignores 'b', thus old contracts pass -> PATCH
+    const { stdout: outPatch } = await execAsync(`node "${bump}" a.test.js`, { cwd, env })
+    equal(outPatch.trim(), 'patch')
+
+    await rm(cwd, { recursive: true, force: true })
+  })
+})
