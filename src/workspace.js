@@ -56,7 +56,10 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
     },
 
     removeFileSync: (filePath) => {
-      try { fs.rmSync(filePath, { force: true }) } catch {}
+      try {
+        fs.rmSync(filePath, { force: true })
+      } catch {
+      }
     },
 
     configureBumpScript: async () => {

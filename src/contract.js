@@ -4,10 +4,7 @@ export const calculateSemanticBump = ({ testOldOnNewPass, testNewOnOldPass }) =>
   return 'patch'
 }
 
-export const evaluateMatrix = async ({
-  workspace, wtGit, run, logger,
-  cwd, worktree, runCmd, sourceFiles, testFiles
-}) => {
+export const evaluateMatrix = async ({ workspace, wtGit, run, logger, cwd, worktree, runCmd, sourceFiles, testFiles }) => {
   logger.info('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
   await workspace.overlayFiles(sourceFiles, cwd, worktree)
   const testOldOnNew = await run(runCmd, worktree)
