@@ -11,7 +11,7 @@ testbump
 
 **The tool that tells you if you broke your own contract.**
 
-`testbump` determines your semantic version based purely on the principle that your **Test Suite is the Contract**. No AST parsing, no complex rules, no dependency hell. Just pure **Test-Driven Bumps (TDB)** using Node and Git.
+`testbump` determines your semantic version based purely on the principle that your **test suite is the versioning contract**. No AST parsing, no complex rules, no dependency hell. Just pure **Test-Driven Bumps (TDB)** using Node and Git.
 
 ## The Logic Matrix
 Let **C** = Code, **T** = Tests.
