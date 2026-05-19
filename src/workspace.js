@@ -45,13 +45,17 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
     },
 
     overlayFiles: async (files, source, destination) => {
-      for (const file of files) {
-        const src = join(source, file)
-        const dst = join(destination, file)
-        if (fs.existsSync(src)) {
-          await fsPromises.mkdir(dirname(dst), { recursive: true })
-          await fsPromises.cp(src, dst, { force: true })
-        }
+      const BATCH_SIZE = 100
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE)
+        await Promise.all(batch.map(async (file) => {
+          const src = join(source, file)
+          const dst = join(destination, file)
+          if (fs.existsSync(src)) {
+            await fsPromises.mkdir(dirname(dst), { recursive: true })
+            await fsPromises.cp(src, dst, { force: true })
+          }
+        }))
       }
     },
 
