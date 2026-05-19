@@ -22,6 +22,20 @@ describe('Git Adapter', () => {
     equal(await createGit('/mock', { run: runFail }).getLatestTag(), null)
   })
 
+  it('listFiles() returns array of tracked files', async ({ mock }) => {
+    const runPass = mock.fn(async () => ({ pass: true, stdout: 'index.js\npackage.json\n', stderr: '' }))
+    const git = createGit('/mock', { run: runPass })
+    const files = await git.listFiles()
+    equal(files.length, 2)
+    equal(files[0], 'index.js')
+  })
+
+  it('listFiles() throws if not a git repo', async ({ mock }) => {
+    const runFail = mock.fn(async () => ({ pass: false, stdout: '', stderr: '' }))
+    const git = createGit('/mock', { run: runFail })
+    await rejects(git.listFiles(), /Not a git repository/)
+  })
+
   it('throws formatted errors on failed critical commands', async ({ mock }) => {
     const runFail = mock.fn(async () => ({ pass: false, stdout: '', stderr: 'Merge conflict' }))
     const git = createGit('/mock', { run: runFail })

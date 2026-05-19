@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import { equal, match } from 'node:assert/strict'
-import { run } from './exec.js'
+import { run } from '../src/exec.js'
 
 describe('Exec Adapter', () => {
   it('returns pass: true for successful commands and streams stdout', async () => {

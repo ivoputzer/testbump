@@ -1,5 +1,5 @@
 import { describe, it } from 'node:test'
-import { equal, rejects, deepEqual } from 'node:assert/strict'
+import { equal, rejects } from 'node:assert/strict'
 import { createWorkspace } from '../src/workspace.js'
 
 describe('Workspace Adapter', () => {
@@ -58,5 +58,32 @@ describe('Workspace Adapter', () => {
 
     const writtenData = JSON.parse(writeFile.mock.calls[0].arguments[1])
     equal(writtenData.scripts.bump, 'npm version $(npx testbump)')
+  })
+
+  it('removeFileSync() fails silently without throwing', ({ mock }) => {
+    const fs = { rmSync: mock.fn(() => { throw new Error('Boom') }) }
+    const ws = createWorkspace('/mock', { fs })
+    ws.removeFileSync('/fake/path') // Should not throw
+    equal(fs.rmSync.mock.callCount(), 1)
+  })
+
+  it('npmVersion() executes npm version command', async ({ mock }) => {
+    const run = mock.fn(async () => ({ pass: true }))
+    const ws = createWorkspace('/mock', { run })
+    await ws.npmVersion('1.0.0', 'chore: init')
+    equal(run.mock.calls[0].arguments[0].includes('npm version 1.0.0'), true)
+  })
+
+  it('discoverContractFiles() parses test runner JSON output', async ({ mock }) => {
+    const run = mock.fn(async () => {})
+    const fs = { existsSync: mock.fn(() => true) }
+    // Mock the file written by the native test reporter
+    const fsPromises = { readFile: mock.fn(async () => '["/mock/test.js", "/mock/other.test.js"]') }
+
+    const ws = createWorkspace('/mock', { fs, fsPromises, run })
+    const files = await ws.discoverContractFiles('node --test', '/results.json')
+
+    equal(files.length, 2)
+    equal(files[0], 'test.js') // Paths become relative to cwd
   })
 })
