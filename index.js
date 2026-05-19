@@ -5,7 +5,6 @@ import fs, { existsSync } from 'node:fs'
 import { exit } from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-// 1. Buffer-Safe Run natively streaming stdout/stderr
 export const run = (command, cwd) => {
   return new Promise((resolve) => {
     const child = spawn(command, { cwd, shell: true, stdio: 'pipe' })
@@ -19,7 +18,6 @@ export const run = (command, cwd) => {
   })
 }
 
-// 2. Extracted Helpers for readability
 export const getTestCommand = async (cwd) => {
   const pkgPath = join(cwd, 'package.json')
   if (!existsSync(pkgPath)) throw new Error('No package.json found.')
@@ -69,12 +67,13 @@ export async function overlayFiles (files, source, destination, { existsSync, pr
   }
 }
 
-// 3. Main Orchestrator
-export const bump = async (cwd) => {
+export const bump = async (cwd, options = {}) => {
   const worktree = join(cwd, '.bump-worktree')
   const resultsPath = join(cwd, '.testbump-files.json')
 
-  // Synchronous teardown required for exit event handlers
+  // Renamed options.dryRun to options.verbose
+  const log = (...args) => { if (options.verbose) console.error(...args) }
+
   const teardown = () => {
     try { execSync(`git worktree remove --force "${worktree}"`, { cwd, stdio: 'ignore' }) } catch {}
     try { fs.rmSync(resultsPath, { force: true }) } catch {}
@@ -89,34 +88,46 @@ export const bump = async (cwd) => {
   process.on('SIGTERM', handleSignal)
 
   try {
+    log('[testbump] Execution initiated. Extracting context...')
     const testCmd = await getTestCommand(cwd)
+    log(`[testbump] Executing test script: \`${testCmd}\``)
+
     const testFiles = await discoverTestFiles(testCmd, cwd, resultsPath)
+    log(`[testbump] Discovered ${testFiles.length} test file(s) forming the contract.`)
 
     const gitFilesResult = await run('git ls-files', cwd)
     if (!gitFilesResult.pass) throw new Error('Not a git repository.')
 
-    // Inline categorization logic
     const allFiles = gitFilesResult.stdout.split('\n').filter(Boolean)
     const sourceFiles = allFiles.filter(f => !testFiles.includes(f) && f !== 'package.json')
+    log(`[testbump] Categorized ${sourceFiles.length} source file(s) tracking API implementation.`)
 
     const tag = await getBaselineTag(cwd)
+    log(`[testbump] Found baseline tag: ${tag}`)
 
-    teardown() // Clean up any stale state before starting matrix
+    teardown()
 
     const worktreeAdd = await run(`git worktree add "${worktree}" ${tag}`, cwd)
     if (!worktreeAdd.pass) throw new Error('Failed to create git worktree.')
 
-    // Scenario A: T(old) on C(new)
+    log('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
     await overlayFiles(sourceFiles, cwd, worktree)
-    const testOldOnNewPass = (await run(testCmd, worktree)).pass
+    const testOldOnNew = await run(testCmd, worktree)
+    log(`[testbump] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
+    if (options.verbose && !testOldOnNew.pass) log(testOldOnNew.stdout || testOldOnNew.stderr)
 
     await run('git reset --hard && git clean -fd', worktree)
 
-    // Scenario B: T(new) on C(old)
+    log('\n[testbump] --- SCENARIO B: T(new) on C(old) ---')
     await overlayFiles(testFiles, cwd, worktree)
-    const testNewOnOldPass = (await run(testCmd, worktree)).pass
+    const testNewOnOld = await run(testCmd, worktree)
+    log(`[testbump] Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
+    if (options.verbose && !testNewOnOld.pass) log(testNewOnOld.stdout || testNewOnOld.stderr)
 
-    return bumpStringFor({ testOldOnNewPass, testNewOnOldPass })
+    const bumpStr = bumpStringFor({ testOldOnNewPass: testOldOnNew.pass, testNewOnOldPass: testNewOnOld.pass })
+    log(`\n[testbump] Conclusion: Incrementing as '${bumpStr.toUpperCase()}'.`)
+
+    return bumpStr
   } finally {
     process.off('SIGINT', handleSignal)
     process.off('SIGTERM', handleSignal)

@@ -159,4 +159,53 @@ describe('Integration E2E (cli)', async () => {
     const { stdout } = await execAsync(`node "${bump}" -v`)
     equal(/^\d+\.\d+\.\d+/.test(stdout.trim()), true)
   })
+
+  it('outputs detailed info to stderr while preserving string output on --verbose', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'testbump-verbose-'))
+    const env = getCleanEnv()
+
+    await execAsync('git init', { cwd })
+    await execAsync('git config user.email "test@bump.local"', { cwd })
+    await execAsync('git config user.name "test"', { cwd })
+
+    await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }))
+    await writeFile(join(cwd, 'index.js'), 'export const a = 1;')
+    await writeFile(join(cwd, 'test.js'), 'import {test} from "node:test"; test("ok", ()=>{});')
+
+    await execAsync('git add . && git commit -m "init" && git tag v1.0.0 -m "1.0.0"', { cwd })
+
+    const { stdout, stderr } = await execAsync(`node "${bump}" --verbose`, { cwd, env })
+
+    // Output should still just be 'patch' for stdout to allow for standard npm version chaining
+    equal(stdout.trim(), 'patch')
+
+    // BUT the stderr should contain our lovely Matrix explanation
+    equal(stderr.includes('[testbump] Execution initiated.'), true)
+    equal(stderr.includes('[testbump] --- SCENARIO A: T(old) on C(new) ---'), true)
+
+    await rm(cwd, { recursive: true, force: true })
+  })
+
+  it('outputs human string to stdout to actively break npm chaining on --dry-run', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'testbump-dryrun-'))
+    const env = getCleanEnv()
+
+    await execAsync('git init', { cwd })
+    await execAsync('git config user.email "test@bump.local"', { cwd })
+    await execAsync('git config user.name "test"', { cwd })
+
+    await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }))
+    await writeFile(join(cwd, 'index.js'), 'export const a = 1;')
+    await writeFile(join(cwd, 'test.js'), 'import {test} from "node:test"; test("ok", ()=>{});')
+
+    await execAsync('git add . && git commit -m "init" && git tag v1.0.0 -m "1.0.0"', { cwd })
+
+    const { stdout, stderr } = await execAsync(`node "${bump}" --dry-run`, { cwd, env })
+
+    // Output is explicitly NOT a valid semver string so it will break $(npm version ...)
+    equal(stdout.includes('[testbump] Dry run complete. Would bump: patch'), true)
+    equal(stderr.trim(), '')
+
+    await rm(cwd, { recursive: true, force: true })
+  })
 })
