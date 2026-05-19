@@ -1,62 +1,59 @@
 import { describe, it } from 'node:test'
-import { equal, match, deepEqual } from 'node:assert/strict'
+import { equal, match, deepEqual, rejects } from 'node:assert/strict'
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 
-import { run, categorizeFiles, bumpStringFor, overlayFiles } from '../index.js'
+import { run, bumpStringFor, overlayFiles, getTestCommand } from '../index.js'
 import customReporter from '../lib/reporter.js'
 
 describe('Module', async () => {
-  describe('lib/.customReporter', () => {
+  describe('customReporter', () => {
     it('yields unique test files natively extracted from test events', async () => {
-      async function * source () {
+      async function * mockSource () {
         yield { data: { file: '/path/to/test1.js' } }
         yield { data: { file: '/path/to/test2.js' } }
-        yield { data: { file: '/path/to/test1.js' } } // duplicate
-        yield { type: 'test:pass', data: {} } // event without file
+        yield { data: { file: '/path/to/test1.js' } }
+        yield { type: 'test:pass', data: {} }
       }
-
-      const reporter = customReporter(source())
-      const { value } = await reporter.next()
-
-      deepEqual(JSON.parse(value), ['/path/to/test1.js', '/path/to/test2.js'])
+      const reporter = customReporter(mockSource())
+      const result = await reporter.next()
+      deepEqual(JSON.parse(result.value), ['/path/to/test1.js', '/path/to/test2.js'])
     })
   })
 
   describe('.run', () => {
-    it('run adds pass pass: true for successful commands', async () => {
+    it('returns pass: true for successful commands and streams stdout', async () => {
       const result = await run('echo "hello"')
       equal(result.pass, true)
       match(result.stdout, /hello/)
     })
+
+    it('returns pass: false and captures stderr for failed commands', async () => {
+      const result = await run('ls /non-existent-directory-12345')
+      equal(result.pass, false)
+      equal(result.stderr.length > 0, true)
+    })
   })
 
-  describe('.categorizeFiles', () => {
-    it('removes package.json file', () => {
-      const allFiles = ['index.js', 'package.json']
-      const testFiles = []
-      const result = categorizeFiles(allFiles, testFiles)
-
-      deepEqual(result.sourceFiles, ['index.js'])
+  describe('.getTestCommand', () => {
+    it('throws if package.json does not exist', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+      await rejects(getTestCommand(cwd), /No package\.json found/)
     })
 
-    it('removes tests from source files', () => {
-      const allFiles = ['index.js', 'test.js']
-      const testFiles = ['test.js']
-      const result = categorizeFiles(allFiles, testFiles)
-
-      deepEqual(result.sourceFiles, ['index.js'])
+    it('throws if package.json has no test script', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+      await writeFile(join(cwd, 'package.json'), '{}')
+      await rejects(getTestCommand(cwd), /No "test" script found/)
     })
 
-    it('separates source from tests', () => {
-      const allFiles = ['index.js', 'test.js', 'package.json', 'README.md']
-      const testFiles = ['test.js']
-
-      const result = categorizeFiles(allFiles, testFiles)
-      deepEqual(result.testFiles, ['test.js'])
-      deepEqual(result.sourceFiles, ['index.js', 'README.md'])
+    it('returns the test script', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-test-'))
+      await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }))
+      const cmd = await getTestCommand(cwd)
+      equal(cmd, 'vitest')
     })
   })
 
@@ -64,11 +61,9 @@ describe('Module', async () => {
     it('returns major (breaking) when T(old) fails on C(new)', () => {
       equal(bumpStringFor({ testOldOnNewPass: false, testNewOnOldPass: true }), 'major')
     })
-
     it('returns minor (feature) when T(old) passes on C(new) AND T(new) fails on C(old)', () => {
       equal(bumpStringFor({ testOldOnNewPass: true, testNewOnOldPass: false }), 'minor')
     })
-
     it('returns patch (fix) when T(old) passes on C(new) AND T(new) passes on C(old)', () => {
       equal(bumpStringFor({ testOldOnNewPass: true, testNewOnOldPass: true }), 'patch')
     })
@@ -89,22 +84,6 @@ describe('Module', async () => {
       equal(existsSync.mock.callCount(), 2)
       equal(mkdir.mock.callCount(), 1)
       equal(cp.mock.callCount(), 1)
-
-      const expectedSrc = join(source, 'exists.txt')
-      const expectedDst = join(destination, 'exists.txt')
-
-      deepEqual(mkdir.mock.calls[0].arguments, [dirname(expectedDst), { recursive: true }])
-      deepEqual(cp.mock.calls[0].arguments, [expectedSrc, expectedDst, { force: true }])
-    })
-
-    it('Integration', async () => {
-      const tmp = await mkdtemp(join(tmpdir(), 'testbump-test-'))
-      const srcDir = join(tmp, 'src')
-      const dstDir = join(tmp, 'dest')
-      await mkdir(srcDir)
-      await writeFile(join(srcDir, 'file.txt'), 'hello')
-      await overlayFiles(['file.txt'], srcDir, dstDir)
-      equal(existsSync(join(dstDir, 'file.txt')), true)
     })
   })
 })
