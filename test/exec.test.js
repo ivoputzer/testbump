@@ -14,4 +14,17 @@ describe('Exec Adapter', () => {
     equal(result.pass, false)
     equal(result.stderr.length > 0, true)
   })
+
+  it('aborts runaway processes using timeout', async () => {
+    const result = await run('sleep 10', process.cwd(), { timeout: 100 })
+    equal(result.pass, false)
+    match(result.stderr, /Process timed out after 100ms/)
+  })
+
+  it('retries failed commands based on retry configuration', async () => {
+    const result = await run('node -e "process.exit(1)"', process.cwd(), { retries: 2 })
+
+    equal(result.pass, false)
+    equal(result.attempt, 2)
+  })
 })

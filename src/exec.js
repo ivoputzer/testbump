@@ -1,21 +1,43 @@
 import { spawn } from 'node:child_process'
 
-export const run = (command, cwd) => {
-  return new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, stdio: 'pipe' })
+export const run = async (command, cwd, options = {}) => {
+  const { timeout = 60000, retries = 0 } = options
 
-    const stdout = []
-    const stderr = []
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await new Promise((resolve) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    child.stdout.on('data', chunk => stdout.push(chunk))
-    child.stderr.on('data', chunk => stderr.push(chunk))
+      const child = spawn(command, { cwd, shell: true, stdio: 'pipe', signal: controller.signal })
 
-    child.on('close', code => {
-      resolve({
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-        pass: code === 0
+      const stdout = []
+      const stderr = []
+
+      child.stdout.on('data', chunk => stdout.push(chunk))
+      child.stderr.on('data', chunk => stderr.push(chunk))
+
+      child.on('close', code => {
+        clearTimeout(timeoutId)
+        resolve({
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+          pass: code === 0,
+          attempt
+        })
+      })
+      child.on('error', (err) => {
+        clearTimeout(timeoutId)
+        resolve({
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: err.name === 'AbortError'
+            ? `Process timed out after ${timeout}ms.`
+            : err.message,
+          pass: false
+        })
       })
     })
-  })
+    if (result.pass || attempt === retries) {
+      return result
+    }
+  }
 }
