@@ -4,23 +4,29 @@ export const calculateSemanticBump = ({ testOldOnNewPass, testNewOnOldPass }) =>
   return 'patch'
 }
 
-export const evaluateMatrix = async ({ workspace, wtGit, run, logger, cwd, worktree, runCmd, sourceFiles, testFiles }) => {
-  logger.info('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
-  await workspace.overlayFiles(sourceFiles, cwd, worktree)
-  const testOldOnNew = await run(runCmd, worktree)
-  logger.info(`[testbump] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
-  if (!testOldOnNew.pass) logger.error(testOldOnNew.stdout || testOldOnNew.stderr)
+export const evaluateMatrix = async ({ workspace, run, logger, cwd, worktreeA, worktreeB, runCmd, sourceFiles, testFiles }) => {
+  const scenarioA = async () => {
+    logger.info('[testbump] (Scenario A → T(old) on C(new)) Overlaying source files...')
+    await workspace.overlayFiles(sourceFiles, cwd, worktreeA)
+    const testOldOnNew = await run(runCmd, worktreeA)
 
-  await wtGit.resetAndClean()
-
-  logger.info('\n[testbump] --- SCENARIO B: T(new) on C(old) ---')
-  await workspace.overlayFiles(testFiles, cwd, worktree)
-  const testNewOnOld = await run(runCmd, worktree)
-  logger.info(`[testbump] Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
-  if (!testNewOnOld.pass) logger.error(testNewOnOld.stdout || testNewOnOld.stderr)
-
-  return {
-    testOldOnNewPass: testOldOnNew.pass,
-    testNewOnOldPass: testNewOnOld.pass
+    logger.info(`[testbump] (Scenario A → T(old) on C(new)) Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
+    if (!testOldOnNew.pass) logger.error(testOldOnNew.stdout || testOldOnNew.stderr)
+    return testOldOnNew.pass
   }
+
+  const scenarioB = async () => {
+    logger.info('[testbump] (Scenario B → T(new) on C(old)) Overlaying test files...')
+    await workspace.overlayFiles(testFiles, cwd, worktreeB)
+    const testNewOnOld = await run(runCmd, worktreeB)
+
+    logger.info(`[testbump] (Scenario B → T(new) on C(old)) Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
+    if (!testNewOnOld.pass) logger.error(testNewOnOld.stdout || testNewOnOld.stderr)
+    return testNewOnOld.pass
+  }
+
+  // BOOM: Parallel Execution!
+  const [testOldOnNewPass, testNewOnOldPass] = await Promise.all([scenarioA(), scenarioB()])
+
+  return { testOldOnNewPass, testNewOnOldPass }
 }

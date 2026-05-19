@@ -11,16 +11,18 @@ import { evaluateMatrix, calculateSemanticBump } from './src/contract.js'
 const noopLogger = { info: () => {}, error: () => {} }
 
 export const bump = async (cwd, options = {}) => {
-  // 1. Setup Adapters locally! No prop drilling.
   const git = createGit(cwd, { run, execSync })
   const workspace = createWorkspace(cwd, { fs, fsPromises: fs.promises, run })
-  const logger = options?.logger ?? noopLogger // createLogger(options.verbose)
+  const logger = options.logger || noopLogger
 
-  const worktree = join(cwd, '.bump-worktree')
+  const worktreeA = join(cwd, '.bump-worktree-A')
+  const worktreeB = join(cwd, '.bump-worktree-B')
+
   const resultsPath = join(cwd, '.testbump-files.json')
 
   const teardown = () => {
-    git.removeWorktreeSync(worktree)
+    git.removeWorktreeSync(worktreeA)
+    git.removeWorktreeSync(worktreeB)
     workspace.removeFileSync(resultsPath)
   }
 
@@ -51,13 +53,14 @@ export const bump = async (cwd, options = {}) => {
 
     teardown()
 
-    await git.createWorktree(worktree, tag)
-    // 2. Just instantiate the worktree Git adapter right here!
-    const wtGit = createGit(worktree, { run, execSync })
+    logger.info('[testbump] Creating isolated parallel git worktrees...')
 
-    const scenarios = await evaluateMatrix({
-      workspace, wtGit, run, logger, cwd, worktree, runCmd, sourceFiles, testFiles
-    })
+    // Create sequentially to prevent git lockfile collisions
+    await git.createWorktree(worktreeA, tag)
+    await git.createWorktree(worktreeB, tag)
+
+    // Execute the matrices in parallel
+    const scenarios = await evaluateMatrix({ workspace, run, logger, cwd, worktreeA, worktreeB, runCmd, sourceFiles, testFiles })
 
     const bumpStr = calculateSemanticBump(scenarios)
     logger.info(`\n[testbump] Conclusion: Incrementing as '${bumpStr.toUpperCase()}'.`)

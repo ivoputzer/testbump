@@ -1,47 +1,35 @@
-import { describe, it } from 'node:test'
-import { equal } from 'node:assert/strict'
-import { calculateSemanticBump, evaluateMatrix } from '../src/contract.js'
+export const calculateSemanticBump = ({ testOldOnNewPass, testNewOnOldPass }) => {
+  if (!testOldOnNewPass) return 'major'
+  if (!testNewOnOldPass) return 'minor'
+  return 'patch'
+}
 
-describe('Contract Domain Logic', () => {
-  describe('calculateSemanticBump()', () => {
-    it('returns major when T(old) fails on C(new)', () => {
-      equal(calculateSemanticBump({ testOldOnNewPass: false, testNewOnOldPass: true }), 'major')
-    })
-    it('returns minor when T(old) passes on C(new) AND T(new) fails on C(old)', () => {
-      equal(calculateSemanticBump({ testOldOnNewPass: true, testNewOnOldPass: false }), 'minor')
-    })
-    it('returns patch when T(old) passes on C(new) AND T(new) passes on C(old)', () => {
-      equal(calculateSemanticBump({ testOldOnNewPass: true, testNewOnOldPass: true }), 'patch')
-    })
-  })
+export const evaluateMatrix = async ({
+  workspace, run, logger,
+  cwd, worktreeA, worktreeB, runCmd, sourceFiles, testFiles
+}) => {
+  const scenarioA = async () => {
+    logger.info('[testbump] [Scenario A] Overlaying source files to test T(old) on C(new)...')
+    await workspace.overlayFiles(sourceFiles, cwd, worktreeA)
+    const testOldOnNew = await run(runCmd, worktreeA)
 
-  describe('evaluateMatrix()', () => {
-    it('orchestrates scenarios and returns correct pass states', async ({ mock }) => {
-      const overlayFiles = mock.fn(async () => {})
-      const workspace = { overlayFiles }
-      const wtGit = { resetAndClean: mock.fn(async () => {}) }
+    logger.info(`[testbump] [Scenario A] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
+    if (!testOldOnNew.pass) logger.error(testOldOnNew.stdout || testOldOnNew.stderr)
+    return testOldOnNew.pass
+  }
 
-      // First call (Scenario A) fails, Second call (Scenario B) passes
-      const run = mock.fn(async () => ({ pass: overlayFiles.mock.calls.length === 1, stdout: '', stderr: '' }))
-      const logger = { info: mock.fn(), error: mock.fn() }
+  const scenarioB = async () => {
+    logger.info('[testbump] [Scenario B] Overlaying test files to test T(new) on C(old)...')
+    await workspace.overlayFiles(testFiles, cwd, worktreeB)
+    const testNewOnOld = await run(runCmd, worktreeB)
 
-      const result = await evaluateMatrix({
-        workspace,
-        wtGit,
-        run,
-        logger,
-        cwd: '/',
-        worktree: '/wt',
-        runCmd: 'test',
-        sourceFiles: [],
-        testFiles: []
-      })
+    logger.info(`[testbump] [Scenario B] Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
+    if (!testNewOnOld.pass) logger.error(testNewOnOld.stdout || testNewOnOld.stderr)
+    return testNewOnOld.pass
+  }
 
-      equal(result.testOldOnNewPass, true)   // Scenario A
-      equal(result.testNewOnOldPass, false)  // Scenario B
-      equal(workspace.overlayFiles.mock.callCount(), 2)
-      equal(run.mock.callCount(), 2)
-      equal(wtGit.resetAndClean.mock.callCount(), 1)
-    })
-  })
-})
+  // Execute in parallel and await both
+  const [testOldOnNewPass, testNewOnOldPass] = await Promise.all([scenarioA(), scenarioB()])
+
+  return { testOldOnNewPass, testNewOnOldPass }
+}

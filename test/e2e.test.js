@@ -1,5 +1,5 @@
 import { describe, it, before, after } from 'node:test'
-import { equal, rejects } from 'node:assert/strict'
+import { match, equal, rejects } from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -178,10 +178,11 @@ describe('Integration E2E (cli)', async () => {
 
     // Output should still just be 'patch' for stdout to allow for standard npm version chaining
     equal(stdout.trim(), 'patch')
-
-    // BUT the stderr should contain our lovely Matrix explanation
     equal(stderr.includes('[testbump] Execution initiated.'), true)
-    equal(stderr.includes('[testbump] --- SCENARIO A: T(old) on C(new) ---'), true)
+
+    // stderr should contain our matrix explanation
+    match(stderr, /T\(old\) on C\(new\)/)
+    match(stderr, /T\(new\) on C\(old\)/)
 
     await rm(cwd, { recursive: true, force: true })
   })

@@ -77,7 +77,6 @@ describe('Workspace Adapter', () => {
   it('discoverContractFiles() parses test runner JSON output', async ({ mock }) => {
     const run = mock.fn(async () => {})
     const fs = { existsSync: mock.fn(() => true) }
-    // Mock the file written by the native test reporter
     const fsPromises = { readFile: mock.fn(async () => '["/mock/test.js", "/mock/other.test.js"]') }
 
     const ws = createWorkspace('/mock', { fs, fsPromises, run })
