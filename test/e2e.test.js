@@ -9,8 +9,19 @@ import { promisify } from 'node:util'
 const execAsync = promisify(exec)
 const bump = join(import.meta.dirname, '..', 'bin', 'bump.js')
 
-describe('Integration E2E (failure)', async (t) => {
+// CRITICAL NODE QUIRK: Strip internal IPC variables for tests.
+// Without this, executing `testbump` via `exec` inside an existing `node --test` suite
+// causes the nested test runners to hijack the parent's IPC pipe and hang.
+const getCleanEnv = () => {
+  const env = { ...process.env }
+  delete env.NODE_TEST_IPC
+  delete env.NODE_TEST_CONTEXT
+  return env
+}
+
+describe('Integration E2E (failure)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'testbump-e2e-fail-'))
+  const env = getCleanEnv()
 
   after(async () => {
     await rm(cwd, { recursive: true, force: true })
@@ -18,7 +29,7 @@ describe('Integration E2E (failure)', async (t) => {
 
   it('fails gracefully when missing package.json', async () => {
     await rejects(
-      execAsync(`node "${bump}"`, { cwd }),
+      execAsync(`node "${bump}"`, { cwd, env }),
       (err) => {
         equal(err.code, 1)
         equal(err.stderr.includes('[testbump] Error: No package.json found.'), true)
@@ -31,11 +42,6 @@ describe('Integration E2E (failure)', async (t) => {
     await execAsync('git init', { cwd })
     await writeFile(join(cwd, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }))
     await writeFile(join(cwd, 'test.js'), 'import {test} from \'node:test\'; test(\'dummy\', ()=>{});')
-
-    // We need our clean env trick here too so it actually discovers the dummy test!
-    const env = { ...process.env }
-    delete env.NODE_TEST_IPC
-    delete env.NODE_TEST_CONTEXT
 
     await rejects(
       execAsync(`node "${bump}"`, { cwd, env }),
@@ -50,12 +56,7 @@ describe('Integration E2E (failure)', async (t) => {
 
 describe('Integration E2E (success)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'testbump-e2e-'))
-
-  // CRITICAL FIX: Strip Node's internal test runner variables.
-  // This prevents the nested CLI execution from hijacking stdout via IPC.
-  const env = { ...process.env }
-  delete env.NODE_TEST_IPC
-  delete env.NODE_TEST_CONTEXT
+  const env = getCleanEnv()
 
   after(async () => {
     await rm(cwd, { recursive: true, force: true })
@@ -93,7 +94,6 @@ test('sum', () => equal(sum(1, 2), 3))
     const srcCodePatch = 'export const sum = (a, b) => a + b\n// patch comment'
     await writeFile(join(cwd, 'index.js'), srcCodePatch)
 
-    // Pass the clean `env` into the execution
     const { stdout } = await execAsync(`node "${bump}"`, { cwd, env })
     equal(stdout.trim(), 'patch')
   })

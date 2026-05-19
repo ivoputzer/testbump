@@ -5,22 +5,31 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 
-import { run, extractTestFilesFromJUnit, categorizeFiles, bumpStringFor, overlayFiles } from '../index.js'
+import { run, categorizeFiles, bumpStringFor, overlayFiles } from '../index.js'
+import customReporter from '../lib/reporter.js'
 
 describe('Module', async () => {
+  describe('lib/.customReporter', () => {
+    it('yields unique test files natively extracted from test events', async () => {
+      async function * source () {
+        yield { data: { file: '/path/to/test1.js' } }
+        yield { data: { file: '/path/to/test2.js' } }
+        yield { data: { file: '/path/to/test1.js' } } // duplicate
+        yield { type: 'test:pass', data: {} } // event without file
+      }
+
+      const reporter = customReporter(source())
+      const { value } = await reporter.next()
+
+      deepEqual(JSON.parse(value), ['/path/to/test1.js', '/path/to/test2.js'])
+    })
+  })
+
   describe('.run', () => {
     it('run adds pass pass: true for successful commands', async () => {
       const result = await run('echo "hello"')
       equal(result.pass, true)
       match(result.stdout, /hello/)
-    })
-  })
-
-  describe('.extractTestFilesFromJUnit', () => {
-    it('extractTestFilesFromJUnit correctly parses test paths', () => {
-      const mockXml = '<testcase name="test1" file="/Users/dev/testbump/test.js"/>\n<testcase name="test2" file="/Users/dev/testbump/lib/other.test.js"/>'
-      const files = extractTestFilesFromJUnit(mockXml, '/Users/dev/testbump')
-      deepEqual(files, ['test.js', 'lib/other.test.js'])
     })
   })
 
