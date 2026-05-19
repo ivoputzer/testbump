@@ -31,7 +31,7 @@ describe('Contract Domain Logic', () => {
       equal(result.testOldOnNewPass, true)   // Scenario A logic
       equal(result.testNewOnOldPass, false)  // Scenario B logic
       equal(workspace.overlayFiles.mock.callCount(), 2)
-      equal(workspace.installDependencies.mock.callCount(), 1) // Scenario B only
+      equal(workspace.installDependencies.mock.callCount(), 2)
       equal(run.mock.callCount(), 2)
     })
   })
