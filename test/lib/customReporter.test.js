@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import { deepEqual } from 'node:assert/strict'
 
-import customReporter from './customReporter.js'
+import customReporter from '../../lib/customReporter.js'
 
 describe('Lib', async () => {
   describe('customReporter', () => {
