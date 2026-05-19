@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test'
 import { equal, rejects } from 'node:assert/strict'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { exec } from 'node:child_process'
@@ -207,5 +207,55 @@ describe('Integration E2E (cli)', async () => {
     equal(stderr.trim(), '')
 
     await rm(cwd, { recursive: true, force: true })
+  })
+
+  describe('Integration E2E (--init)', async () => {
+    it('bootstraps a project successfully', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-init-'))
+      const env = getCleanEnv()
+
+      await execAsync('git init', { cwd })
+      await execAsync('git config user.email "test@bump.local"', { cwd })
+      await execAsync('git config user.name "test"', { cwd })
+
+      // Setup blank project without testbump
+      const pkgJson = JSON.stringify({ version: '1.2.3' })
+      await writeFile(join(cwd, 'package.json'), pkgJson)
+
+      // Must commit something so git tags have a target HEAD
+      await execAsync('git add . && git commit -m "initial file"', { cwd })
+
+      const { stdout } = await execAsync(`node "${bump}" --init`, { cwd, env })
+
+      // Verify Console Output
+      equal(stdout.includes('Successfully configured "bump" script'), true)
+      equal(stdout.includes('Created baseline tag: v1.2.3'), true)
+
+      // Verify Package.json mutated
+      const updatedPkg = JSON.parse(await readFile(join(cwd, 'package.json'), 'utf8'))
+      equal(updatedPkg.scripts.bump, 'npm version $(npx testbump)')
+
+      // Verify Tag actually exists natively
+      const { stdout: tagOut } = await execAsync('git describe --tags --abbrev=0', { cwd })
+      equal(tagOut.trim(), 'v1.2.3')
+
+      await rm(cwd, { recursive: true, force: true })
+    })
+
+    it('fails gracefully if not a git repository', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-init-fail-'))
+      await writeFile(join(cwd, 'package.json'), '{}')
+
+      await rejects(
+        execAsync(`node "${bump}" --init`, { cwd }),
+        (err) => {
+          equal(err.code, 1)
+          equal(err.stderr.includes('[testbump] Initialization Error: Not a git repository'), true)
+          return true
+        }
+      )
+
+      await rm(cwd, { recursive: true, force: true })
+    })
   })
 })

@@ -1,6 +1,6 @@
 import { relative, join, dirname } from 'node:path'
 import { spawn, execSync } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import fs, { existsSync } from 'node:fs'
 import { exit } from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -133,4 +133,45 @@ export const bump = async (cwd, options = {}) => {
     process.off('SIGTERM', handleSignal)
     teardown()
   }
+}
+
+export const init = async (cwd) => {
+  const pkgPath = join(cwd, 'package.json')
+  if (!existsSync(pkgPath)) throw new Error('No package.json found. Please run `npm init` first.')
+
+  const gitCheck = await run('git status', cwd)
+  if (!gitCheck.pass) throw new Error('Not a git repository. Please run `git init` first.')
+
+  const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
+  pkg.scripts = pkg.scripts || {}
+  pkg.scripts.bump = 'npm version $(npx testbump)'
+
+  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+
+  // We strictly add and commit only the package.json to avoid committing unfinished user work
+  await run('git add package.json', cwd)
+  const commitRes = await run('git commit -m "chore: setup testbump"', cwd)
+
+  let message = '[testbump] Successfully configured "bump" script in package.json.\n'
+
+  const tags = await run('git describe --tags --abbrev=0', cwd)
+
+  if (!tags.pass || !tags.stdout.trim()) {
+    const v = pkg.version || '0.0.0'
+
+    // We attempt to use `npm version` because it also updates package-lock.json if present
+    const npmRes = await run(`npm version ${v} --allow-same-version`, cwd)
+
+    if (npmRes.pass) {
+      message += `[testbump] Created baseline tag: v${v}`
+    } else {
+      // Fallback directly to git tag if npm fails (e.g., dirty working tree)
+      await run(`git tag v${v}`, cwd)
+      message += `[testbump] Created baseline git tag: v${v}`
+    }
+  } else {
+    message += `[testbump] Baseline tag already exists: ${tags.stdout.trim()}`
+  }
+
+  return message
 }
