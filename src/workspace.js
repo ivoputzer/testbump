@@ -46,14 +46,31 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
 
     overlayFiles: async (files, source, destination) => {
       const BATCH_SIZE = 100
+      const createdDirs = new Set()
+
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE)
+
         await Promise.all(batch.map(async (file) => {
           const src = join(source, file)
           const dst = join(destination, file)
+
           if (fs.existsSync(src)) {
-            await fsPromises.mkdir(dirname(dst), { recursive: true })
-            await fsPromises.cp(src, dst, { force: true })
+            const dir = dirname(dst)
+
+            // 1. Thread-safe, memoized directory creation
+            if (!createdDirs.has(dir)) {
+              try {
+                await fsPromises.mkdir(dir, { recursive: true })
+              } catch (err) {
+                // Safely ignore EEXIST if another promise beat us to it
+                if (err.code !== 'EEXIST') throw err
+              }
+              createdDirs.add(dir)
+            }
+
+            // 2. High-performance, concurrent file copying
+            await fsPromises.copyFile(src, dst)
           }
         }))
       }

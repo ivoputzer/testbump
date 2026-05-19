@@ -35,14 +35,14 @@ describe('Workspace Adapter', () => {
   it('overlayFiles() filters existence and calls mkdir and cp', async ({ mock }) => {
     const fs = { existsSync: mock.fn((file) => file.includes('exists.txt')) }
     const mkdir = mock.fn()
-    const cp = mock.fn()
-    const ws = createWorkspace('/mock', { fs, fsPromises: { mkdir, cp } })
+    const copyFile = mock.fn()
+    const ws = createWorkspace('/mock', { fs, fsPromises: { mkdir, copyFile } })
 
     await ws.overlayFiles(['exists.txt', 'missing.txt'], '/src', '/dest')
 
     equal(fs.existsSync.mock.callCount(), 2)
     equal(mkdir.mock.callCount(), 1)
-    equal(cp.mock.callCount(), 1)
+    equal(copyFile.mock.callCount(), 1)
   })
 
   it('configureBumpScript() writes to package.json and returns version', async ({ mock }) => {

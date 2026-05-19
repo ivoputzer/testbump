@@ -1,4 +1,3 @@
-// ==> index.js <==
 import { join } from 'node:path'
 import { exit } from 'node:process'
 import { execSync } from 'node:child_process'
