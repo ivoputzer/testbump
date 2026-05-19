@@ -136,3 +136,27 @@ test('sum', () => equal(sum(1, 2), 3))
     equal(stdout.trim(), 'major')
   })
 })
+
+describe('Integration E2E (cli)', async () => {
+  it('outputs help text natively with --help', async () => {
+    const { stdout } = await execAsync(`node "${bump}" --help`)
+    equal(stdout.includes('Usage:'), true)
+    equal(stdout.includes('testbump [options]'), true)
+  })
+
+  it('outputs help text natively with -h', async () => {
+    const { stdout } = await execAsync(`node "${bump}" -h`)
+    equal(stdout.includes('Usage:'), true)
+  })
+
+  it('outputs version natively with --version', async () => {
+    const { stdout } = await execAsync(`node "${bump}" --version`)
+    // Matches standard semver (e.g., 1.1.0)
+    equal(/^\d+\.\d+\.\d+/.test(stdout.trim()), true)
+  })
+
+  it('outputs version natively with -v', async () => {
+    const { stdout } = await execAsync(`node "${bump}" -v`)
+    equal(/^\d+\.\d+\.\d+/.test(stdout.trim()), true)
+  })
+})
