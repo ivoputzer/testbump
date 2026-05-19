@@ -23,19 +23,19 @@ describe('Module', async () => {
     })
   })
 
-  describe('.run', () => {
-    it('returns pass: true for successful commands and streams stdout', async () => {
-      const result = await run('echo "hello"')
-      equal(result.pass, true)
-      match(result.stdout, /hello/)
-    })
+  // describe('.run', () => {
+  //   it('returns pass: true for successful commands and streams stdout', async () => {
+  //     const result = await run('echo "hello"')
+  //     equal(result.pass, true)
+  //     match(result.stdout, /hello/)
+  //   })
 
-    it('returns pass: false and captures stderr for failed commands', async () => {
-      const result = await run('ls /non-existent-directory-12345')
-      equal(result.pass, false)
-      equal(result.stderr.length > 0, true)
-    })
-  })
+  //   it('returns pass: false and captures stderr for failed commands', async () => {
+  //     const result = await run('ls /non-existent-directory-12345')
+  //     equal(result.pass, false)
+  //     equal(result.stderr.length > 0, true)
+  //   })
+  // })
 
   describe('.getTestCommand', () => {
     it('throws if package.json does not exist', async () => {

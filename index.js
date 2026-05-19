@@ -1,22 +1,14 @@
 import { relative, join, dirname } from 'node:path'
-import { spawn, execSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import fs, { existsSync } from 'node:fs'
 import { exit } from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { createGit } from './src/git.js'
+import { run } from './src/exec.js'
 
-export const run = (command, cwd) => {
-  return new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, stdio: 'pipe' })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', chunk => { stdout += chunk.toString() })
-    child.stderr.on('data', chunk => { stderr += chunk.toString() })
-    child.on('close', code => {
-      resolve({ stdout, stderr, pass: code === 0 })
-    })
-  })
-}
+// Exporting to not break existing external consumers of testbump during refactor
+export { run }
 
 export const getTestCommand = async (cwd) => {
   const pkgPath = join(cwd, 'package.json')
@@ -30,11 +22,8 @@ export const getTestCommand = async (cwd) => {
 
 export const discoverTestFiles = async (testCmd, cwd, resultsPath, globs = []) => {
   const reporterPath = fileURLToPath(new URL('./lib/reporter.js', import.meta.url))
-
   let cmd = `${testCmd} --test-reporter="${reporterPath}" --test-reporter-destination="${resultsPath}"`
-  if (globs.length > 0) {
-    cmd += ' ' + globs.map(g => `"${g}"`).join(' ')
-  }
+  if (globs.length > 0) cmd += ' ' + globs.map(g => `"${g}"`).join(' ')
 
   await run(cmd, cwd)
 
@@ -48,14 +37,6 @@ export const discoverTestFiles = async (testCmd, cwd, resultsPath, globs = []) =
   }
 
   return testFiles
-}
-
-export const getBaselineTag = async (cwd) => {
-  const { pass, stdout } = await run('git describe --tags --abbrev=0', cwd)
-  if (!pass || !stdout.trim()) {
-    throw new Error('No baseline git tag found! Please manually create your first tag (e.g., `git tag 0.0.1`) to establish the baseline contract.')
-  }
-  return stdout.trim()
 }
 
 export function bumpStringFor ({ testOldOnNewPass, testNewOnOldPass }) {
@@ -79,10 +60,13 @@ export const bump = async (cwd, options = {}) => {
   const worktree = join(cwd, '.bump-worktree')
   const resultsPath = join(cwd, '.testbump-files.json')
 
+  // Phase 1: Initialize Git Adapter
+  const git = createGit(cwd, { run, execSync })
+
   const log = (...args) => { if (options.verbose) console.error(...args) }
 
   const teardown = () => {
-    try { execSync(`git worktree remove --force "${worktree}"`, { cwd, stdio: 'ignore' }) } catch {}
+    git.removeWorktreeSync(worktree)
     try { fs.rmSync(resultsPath, { force: true }) } catch {}
   }
 
@@ -99,8 +83,6 @@ export const bump = async (cwd, options = {}) => {
 
     const testCmd = await getTestCommand(cwd)
     const globs = options.globs || []
-
-    // Command used for actual scenarios Matrix runs
     const runCmd = globs.length > 0 ? `${testCmd} ` + globs.map(g => `"${g}"`).join(' ') : testCmd
 
     log(`[testbump] Executing test script: \`${runCmd}\``)
@@ -108,20 +90,22 @@ export const bump = async (cwd, options = {}) => {
     const testFiles = await discoverTestFiles(testCmd, cwd, resultsPath, globs)
     log(`[testbump] Discovered ${testFiles.length} test file(s) forming the contract.`)
 
-    const gitFilesResult = await run('git ls-files', cwd)
-    if (!gitFilesResult.pass) throw new Error('Not a git repository.')
-
-    const allFiles = gitFilesResult.stdout.split('\n').filter(Boolean)
+    const allFiles = await git.listFiles()
     const sourceFiles = allFiles.filter(f => !testFiles.includes(f) && f !== 'package.json')
     log(`[testbump] Categorized ${sourceFiles.length} source file(s) tracking API implementation.`)
 
-    const tag = await getBaselineTag(cwd)
+    const tag = await git.getLatestTag()
+    if (!tag) {
+      throw new Error('No baseline git tag found! Please manually create your first tag (e.g., `git tag 0.0.1`) to establish the baseline contract.')
+    }
     log(`[testbump] Found baseline tag: ${tag}`)
 
     teardown()
 
-    const worktreeAdd = await run(`git worktree add "${worktree}" ${tag}`, cwd)
-    if (!worktreeAdd.pass) throw new Error('Failed to create git worktree.')
+    await git.createWorktree(worktree, tag)
+
+    // Create a specific git adapter scoped purely to the worktree path!
+    const wtGit = createGit(worktree, { run, execSync })
 
     log('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
     await overlayFiles(sourceFiles, cwd, worktree)
@@ -129,7 +113,7 @@ export const bump = async (cwd, options = {}) => {
     log(`[testbump] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
     if (options.verbose && !testOldOnNew.pass) log(testOldOnNew.stdout || testOldOnNew.stderr)
 
-    await run('git reset --hard && git clean -fd', worktree)
+    await wtGit.resetAndClean()
 
     log('\n[testbump] --- SCENARIO B: T(new) on C(old) ---')
     await overlayFiles(testFiles, cwd, worktree)
@@ -152,40 +136,35 @@ export const init = async (cwd, options = {}) => {
   const pkgPath = join(cwd, 'package.json')
   if (!existsSync(pkgPath)) throw new Error('No package.json found. Please run `npm init` first.')
 
-  const gitCheck = await run('git status', cwd)
-  if (!gitCheck.pass) throw new Error('Not a git repository. Please run `git init` first.')
+  const git = createGit(cwd, { run, execSync })
+  if (!(await git.isRepository())) throw new Error('Not a git repository. Please run `git init` first.')
 
   const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
   pkg.scripts = pkg.scripts || {}
   pkg.scripts.bump = 'npm version $(npx testbump)'
 
-  // Update package.json on disk
   await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-
   let message = '[testbump] Successfully configured "bump" script in package.json.\n'
 
-  const tags = await run('git describe --tags --abbrev=0', cwd)
+  const tag = await git.getLatestTag()
 
-  if (!tags.pass || !tags.stdout.trim()) {
+  if (!tag) {
     const v = pkg.version || '0.0.1'
     const commitMsg = options.message || options.tagMessage || `chore: baseline ${v}`
 
-    // We use --force to tell npm version it's okay that we just modified package.json
-    // This allows it to stage, commit, and tag in one atomic step.
+    // Phase 1 skip: we leave npm logic as-is until the Workspace adapter
     const npmRes = await run(`npm version ${v} -m "${commitMsg}" --allow-same-version --force`, cwd)
 
     if (npmRes.pass) {
-      // Reverted string to match existing E2E test expectations
       message += `[testbump] Created baseline tag: v${v}`
     } else {
-      // Manual Fallback
-      await run('git add package.json', cwd)
-      await run(`git commit -m "${commitMsg}"`, cwd)
-      await run(`git tag v${v} -m "${commitMsg}"`, cwd)
+      await git.add('package.json')
+      await git.commit(commitMsg)
+      await git.createTag(`v${v}`, commitMsg)
       message += `[testbump] Created baseline tag: v${v}`
     }
   } else {
-    message += `[testbump] Baseline tag already exists: ${tags.stdout.trim()}`
+    message += `[testbump] Baseline tag already exists: ${tag}`
   }
 
   return message
