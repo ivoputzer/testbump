@@ -1,4 +1,3 @@
-// ==> test/git.test.js <==
 import { describe, it } from 'node:test'
 import { equal, rejects } from 'node:assert/strict'
 import { createGit } from '../src/git.js'

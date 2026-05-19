@@ -23,7 +23,7 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
     },
 
     discoverContractFiles: async (testCmd, resultsPath, globs = []) => {
-      const reporterPath = fileURLToPath(new URL('../lib/reporter.js', import.meta.url))
+      const reporterPath = fileURLToPath(new URL('../lib/customReporter.js', import.meta.url))
       let cmd = `${testCmd} --test-reporter="${reporterPath}" --test-reporter-destination="${resultsPath}"`
 
       if (globs.length > 0) cmd += ' ' + globs.map(g => `"${g}"`).join(' ')
