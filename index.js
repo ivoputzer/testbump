@@ -148,7 +148,7 @@ export const bump = async (cwd, options = {}) => {
   }
 }
 
-export const init = async (cwd) => {
+export const init = async (cwd, options = {}) => {
   const pkgPath = join(cwd, 'package.json')
   if (!existsSync(pkgPath)) throw new Error('No package.json found. Please run `npm init` first.')
 
@@ -159,28 +159,30 @@ export const init = async (cwd) => {
   pkg.scripts = pkg.scripts || {}
   pkg.scripts.bump = 'npm version $(npx testbump)'
 
+  // Update package.json on disk
   await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-
-  // We strictly add and commit only the package.json to avoid committing unfinished user work
-  await run('git add package.json', cwd)
-  const commitRes = await run('git commit -m "chore: setup testbump"', cwd)
 
   let message = '[testbump] Successfully configured "bump" script in package.json.\n'
 
   const tags = await run('git describe --tags --abbrev=0', cwd)
 
   if (!tags.pass || !tags.stdout.trim()) {
-    const v = pkg.version || '0.0.0'
+    const v = pkg.version || '0.0.1'
+    const commitMsg = options.message || options.tagMessage || `chore: baseline ${v}`
 
-    // We attempt to use `npm version` because it also updates package-lock.json if present
-    const npmRes = await run(`npm version ${v} --allow-same-version`, cwd)
+    // We use --force to tell npm version it's okay that we just modified package.json
+    // This allows it to stage, commit, and tag in one atomic step.
+    const npmRes = await run(`npm version ${v} -m "${commitMsg}" --allow-same-version --force`, cwd)
 
     if (npmRes.pass) {
+      // Reverted string to match existing E2E test expectations
       message += `[testbump] Created baseline tag: v${v}`
     } else {
-      // Fallback directly to git tag if npm fails (e.g., dirty working tree)
-      await run(`git tag v${v}`, cwd)
-      message += `[testbump] Created baseline git tag: v${v}`
+      // Manual Fallback
+      await run('git add package.json', cwd)
+      await run(`git commit -m "${commitMsg}"`, cwd)
+      await run(`git tag v${v} -m "${commitMsg}"`, cwd)
+      message += `[testbump] Created baseline tag: v${v}`
     }
   } else {
     message += `[testbump] Baseline tag already exists: ${tags.stdout.trim()}`

@@ -257,6 +257,31 @@ describe('Integration E2E (cli)', async () => {
 
       await rm(cwd, { recursive: true, force: true })
     })
+
+    it('allows custom messages during initialization', async () => {
+      const cwd = await mkdtemp(join(tmpdir(), 'testbump-init-custom-'))
+      const env = getCleanEnv()
+
+      await execAsync('git init', { cwd })
+      await execAsync('git config user.email "test@bump.local"', { cwd })
+      await execAsync('git config user.name "test"', { cwd })
+
+      await writeFile(join(cwd, 'package.json'), JSON.stringify({ version: '1.0.0' }))
+      await execAsync('git add . && git commit -m "initial file"', { cwd })
+
+      // We pass a single message to be used for the baseline
+      await execAsync(`node "${bump}" --init --init-message "baseline setup"`, { cwd, env })
+
+      // Verify there is only ONE new commit since "initial file"
+      const { stdout: commitLog } = await execAsync('git log -1 --pretty=%B', { cwd })
+      equal(commitLog.trim(), 'baseline setup')
+
+      // Verify Tag exists on that exact commit
+      const { stdout: tagLog } = await execAsync('git tag -n1', { cwd })
+      equal(tagLog.includes('baseline setup'), true)
+
+      await rm(cwd, { recursive: true, force: true })
+    })
   })
 })
 

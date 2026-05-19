@@ -11,7 +11,9 @@ const options = {
   version: { type: 'boolean', short: 'v' },
   verbose: { type: 'boolean' },
   'dry-run': { type: 'boolean', short: 'd' },
-  init: { type: 'boolean' }
+  init: { type: 'boolean' },
+  'init-message': { type: 'string' },
+  'init-tag-message': { type: 'string' }
 }
 
 let args
@@ -36,11 +38,12 @@ Usage:
   testbump [options] [test-files...]
 
 Options:
-  -h, --help       Show this help message
-  -v, --version    Show the currently installed testbump version
-      --verbose    Run the logic matrix and output detailed explanations to stderr
-  -d, --dry-run    Run the logic matrix, output explanations, and prevent accidental npm chaining
-      --init       Bootstrap the project: update package.json and create baseline git tag
+  -h, --help               Show this help message
+  -v, --version            Show the currently installed testbump version
+      --verbose            Run the logic matrix and output detailed explanations to stderr
+  -d, --dry-run            Run the logic matrix, output explanations, and prevent accidental npm chaining
+      --init               Bootstrap the project: update package.json and create baseline git tag
+      --init-message       Custom commit message for the init commit
   `)
   exit(0)
 }
@@ -54,7 +57,9 @@ if (values.version) {
 
 if (values.init) {
   try {
-    console.log(await init(cwd()))
+    console.log(await init(cwd(), {
+      message: values['init-message'],
+    }))
     exit(0)
   } catch ({ message }) {
     console.error('[testbump] Initialization Error: %s', message)
@@ -63,7 +68,6 @@ if (values.init) {
 }
 
 try {
-  // FIXED Regression 1: Keep verbose decoupled from dry-run
   const bumpStr = await bump(cwd(), {
     verbose: values.verbose,
     globs: positionals
