@@ -6,7 +6,8 @@
   "type": "module",
   "main": "index.js",
   "bin": {
-    "testbump": "./bin/testbump.js"
+    "testbump": "./bin/bump.js",
+    "tb": "./bin/bump.js"
   },
   "scripts": {
     "test": "node --test",
