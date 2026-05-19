@@ -23,6 +23,7 @@ Let **old** = Last Git Tag, **new** = Current HEAD.
 
 🩹 **PATCH (Fix):** `T(old)` passes on `C(new)` AND `T(new)` passes on `C(old)`. *(Old contracts are intact, and no new code surface was tested).*
 
+
 ## Usage
 Run it in your CI or locally to get the next version bump
 ```bash
@@ -32,6 +33,11 @@ npx testbump # outputs: major, minor, or patch
 Chain it directly into npm
 ```bash
 npm version $(npx testbump)
+```
+
+Initialize your project automatically
+```bash
+npx testbump --init
 ```
 
 ## Setup
@@ -55,6 +61,20 @@ npm version $(npx testbump)
    ```
 4. **Let `testbump` take the wheel:**
    From now on, just run `npm run bump` when you want to release! Or have the [CI](https://github.com/ivoputzer/testbump/blob/main/.github/workflows/cd.yml#L43-L50) do it!
+
+## Programmatic API
+`testbump` isn't just a CLI. It's completely decoupled, meaning you can integrate it directly into your own Node-based CI/CD pipelines, bots, or release scripts.
+
+```javascript
+import { bump, init } from 'testbump'
+import { cwd } from 'node:process'
+
+// Returns 'major', 'minor', or 'patch'
+const nextVersion = await bump(cwd(), {
+  verbose: true,
+  globs: ['test/**/*.test.js'] // Optionally scope your contracts
+})
+```
 
 ## Requirements
 * Git
