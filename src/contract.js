@@ -11,9 +11,12 @@ export const evaluateMatrix = async ({ workspace, run, logger, cwd, worktreeA, w
   const scenarioA = async () => {
     logger.info('[testbump] (Scenario A → T(old) on C(new)) Overlaying source files...')
     await workspace.overlayFiles(sourceFiles, cwd, worktreeA)
+
+    await workspace.installDependencies(worktreeA)
+    logger.info(`[testbump] (Scenario A → T(old) on C(new)) Syncing dependencies...`)
     const testOldOnNew = await run(runCmd, worktreeA, execOptions)
 
-    logger.info(`[testbump] (Scenario A → T(old) on C(new)) Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
+    logger.info(`[testbump] (Scenario A → T(old) on C(new)) Are old contracts intact? (attempt: ${testOldOnNew.attempt}) ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
     if (!testOldOnNew.pass) logger.error(testOldOnNew.stdout || testOldOnNew.stderr)
     return testOldOnNew.pass
   }
@@ -22,17 +25,16 @@ export const evaluateMatrix = async ({ workspace, run, logger, cwd, worktreeA, w
     logger.info('[testbump] (Scenario B → T(new) on C(old)) Overlaying test files...')
     await workspace.overlayFiles(testFiles, cwd, worktreeB)
 
-    logger.info('[testbump] (Scenario B) Syncing dependencies...')
     await workspace.installDependencies(worktreeB)
-
+    logger.info(`[testbump] (Scenario B → T(new) on C(old)) Syncing dependencies...`)
     const testNewOnOld = await run(runCmd, worktreeB, execOptions)
 
-    logger.info(`[testbump] (Scenario B → T(new) on C(old)) Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
+    logger.info(`[testbump] (Scenario B → T(new) on C(old)) Are there new test contracts? (attempt: ${testNewOnOld.attempt}) ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
     if (!testNewOnOld.pass) logger.error(testNewOnOld.stdout || testNewOnOld.stderr)
     return testNewOnOld.pass
   }
 
-  // BOOM: Parallel Execution!
+  // Parallel Execution!
   const [testOldOnNewPass, testNewOnOldPass] = await Promise.all([scenarioA(), scenarioB()])
 
   return { testOldOnNewPass, testNewOnOldPass }

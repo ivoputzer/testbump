@@ -318,3 +318,60 @@ describe('Integration E2E (custom scopes)', async () => {
     await rm(cwd, { recursive: true, force: true })
   })
 })
+
+describe('Integration E2E (Dependencies)', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'testbump-deps-'))
+  const env = getCleanEnv()
+
+  after(async () => {
+    await rm(cwd, { recursive: true, force: true })
+  })
+
+  it('installs missing node_modules inside the isolated git worktrees', async () => {
+    await execAsync('git init', { cwd })
+    await execAsync('git config user.email "test@bump.local"', { cwd })
+    await execAsync('git config user.name "test"', { cwd })
+
+    const pkgJson = JSON.stringify({ type: 'module', scripts: { test: 'node --test' } })
+    await writeFile(join(cwd, 'package.json'), pkgJson)
+
+    // Dogfooding! Install the actual testbump package from the npm registry
+    await writeFile(join(cwd, '.gitignore'), 'node_modules/\n')
+    await execAsync('npm install --save testbump@1.0.0', { cwd })
+
+    // Create a file that relies on the dependency
+    await writeFile(join(cwd, 'index.js'), `
+      import { bumpStringFor } from 'testbump'
+      export const check = () => bumpStringFor({ testOldOnNewPass: true, testNewOnOldPass: true })
+    `)
+
+    // Create a test for it
+    await writeFile(join(cwd, 'test.js'), `
+      import { test } from 'node:test'
+      import { equal } from 'node:assert/strict'
+      import { check } from './index.js'
+      test('dogfood dependency works', () => equal(check(), 'patch'))
+    `)
+
+    await execAsync('git add .', { cwd })
+    await execAsync('git commit -m "init with deps"', { cwd })
+    await execAsync('git tag v1.0.0 -m "1.0.0"', { cwd })
+
+    // SCENARIO: PATCH (We add a comment, so logic is perfectly intact)
+    await writeFile(join(cwd, 'index.js'), `
+      import { bumpStringFor } from 'testbump'
+      export const check = () => bumpStringFor({ testOldOnNewPass: true, testNewOnOldPass: true })
+      // Unrelated patch comment
+    `)
+
+    // THE ULTIMATE TEST: Nuke the parent node_modules.
+    // The worktrees CANNOT leech off the parent anymore.
+    await rm(join(cwd, 'node_modules'), { recursive: true, force: true })
+
+    const { stdout } = await execAsync(`node "${bump}"`, { cwd, env })
+
+    // If `installDependencies` is commented out, it crashes with ERR_MODULE_NOT_FOUND, returning 'major'.
+    // If it works, the tests pass beautifully and return 'patch'.
+    equal(stdout.trim(), 'patch')
+  })
+})

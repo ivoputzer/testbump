@@ -92,6 +92,19 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
       return pkg.version || '0.0.1'
     },
 
+    installDependencies: async (targetCwd) => {
+      const pkgPath = join(targetCwd, 'package.json')
+      if (!fs.existsSync(pkgPath)) return { pass: true }
+
+      // --prefer-offline uses the global npm cache to make this lightning fast
+      // --no-audit and --no-fund silence the CLI spam
+      const res = await run('npm install --no-audit --no-fund --prefer-offline', targetCwd, { retries: 2 })
+      if (!res.pass) {
+        throw new Error(`Failed to install dependencies in worktree:\n${res.stderr || res.stdout}`)
+      }
+      return res
+    },
+
     npmVersion: async (version, commitMsg) => {
       return run(`npm version ${version} -m "${commitMsg}" --allow-same-version --force`, cwd)
     }
