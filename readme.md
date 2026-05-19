@@ -58,7 +58,7 @@ npm version $(npx testbump)
 
 ## Requirements
 * Git
-* Node v22+
+* Node LTS
 * Tests written using the native `node:test` runner.
 
 ## License

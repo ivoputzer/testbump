@@ -7,10 +7,10 @@ import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execAsync = promisify(exec)
+const bump = join(import.meta.dirname, '..', 'bin', 'bump.js')
 
 describe('Integration E2E (failure)', async (t) => {
   const cwd = await mkdtemp(join(tmpdir(), 'testbump-e2e-fail-'))
-  const bump = join(process.cwd(), 'bin', 'testbump.js')
 
   after(async () => {
     await rm(cwd, { recursive: true, force: true })
@@ -50,7 +50,6 @@ describe('Integration E2E (failure)', async (t) => {
 
 describe('Integration E2E (success)', async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'testbump-e2e-'))
-  const bump = join(process.cwd(), 'bin', 'testbump.js')
 
   // CRITICAL FIX: Strip Node's internal test runner variables.
   // This prevents the nested CLI execution from hijacking stdout via IPC.

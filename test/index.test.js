@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 
-import { run, extractTestFilesFromJUnit, categorizeFiles, bumpStringFor, overlayFiles } from './index.js'
+import { run, extractTestFilesFromJUnit, categorizeFiles, bumpStringFor, overlayFiles } from '../index.js'
 
 describe('Module', async () => {
   describe('.run', () => {
