@@ -121,7 +121,7 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
 
       await fsPromises.writeFile(wtPkgPath, JSON.stringify(hybridPkg, null, 2) + '\n')
 
-      // Recycling:
+      // DEPENDENCY RECYCLING: Node will traverse up and use the parent modules.
       // If our synthesized environment matches the parent exactly, we skip installation.
       // Node will natively traverse up and use the parent's node_modules!
       const getDepsStr = (pkg) => JSON.stringify({ d: pkg.dependencies || {}, dev: pkg.devDependencies || {} })
@@ -130,6 +130,7 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
 
       if (isPerfectMatch && parentHasModules) return { pass: true } // Zero-latency execution
 
+      // DETERMINISTIC FALLBACK: Drift detected or cold environment.
       // We must drop the lockfile (--no-package-lock) because our synthesized hybrid package.json is a unique timeline fracture that will not match either existing lockfile.
       const res = await run('npm install --no-package-lock --no-audit --no-fund --prefer-offline', worktreeCwd, { retries: 2 })
 
