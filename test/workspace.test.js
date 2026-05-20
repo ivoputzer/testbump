@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import { equal, rejects } from 'node:assert/strict'
 import { createWorkspace } from '../src/workspace.js'
 
-describe('Workspace Adapter', () => {
+describe('src/workspace (adapter)', () => {
   it('getTestCommand() throws if missing package.json', async ({ mock }) => {
     const fs = { existsSync: mock.fn(() => false) }
     const ws = createWorkspace('/mock', { fs })
@@ -84,5 +84,71 @@ describe('Workspace Adapter', () => {
 
     equal(files.length, 2)
     equal(files[0], 'test.js') // Paths become relative to cwd
+  })
+
+  it('syncDependencies() synthesizes correct hybrid package.json for Scenario A and triggers install if drifted', async ({ mock }) => {
+    const fs = { existsSync: mock.fn(() => true) }
+    // devDependencies drifted!
+    const wtPkg = JSON.stringify({ dependencies: { a: '2' }, devDependencies: { test: '1' } })
+    const parentPkg = JSON.stringify({ dependencies: { a: '2' }, devDependencies: { test: '2' } })
+
+    let writtenPkg = ''
+    const fsPromises = {
+      readFile: mock.fn(async (p) => p.includes('worktree') ? wtPkg : parentPkg),
+      writeFile: mock.fn(async (p, data) => { writtenPkg = data })
+    }
+    const run = mock.fn(async () => ({ pass: true }))
+
+    const ws = createWorkspace('/mock', { fs, fsPromises, run })
+    await ws.syncDependencies('/worktree', '/parent', 'A')
+
+    const result = JSON.parse(writtenPkg)
+    equal(result.dependencies.a, '2') // New deps
+    equal(result.devDependencies.test, '1') // Old devDeps
+    equal(run.mock.callCount(), 1) // Network triggered because devDependencies drifted!
+    equal(run.mock.calls[0].arguments[0].includes('--no-package-lock'), true)
+  })
+
+  it('syncDependencies() synthesizes correct hybrid package.json for Scenario B and triggers install if drifted', async ({ mock }) => {
+    const fs = { existsSync: mock.fn(() => true) }
+    // dependencies drifted!
+    const wtPkg = JSON.stringify({ dependencies: { a: '1' }, devDependencies: { test: '2' } })
+    const parentPkg = JSON.stringify({ dependencies: { a: '2' }, devDependencies: { test: '2' } })
+
+    let writtenPkg = ''
+    const fsPromises = {
+      readFile: mock.fn(async (p) => p.includes('worktree') ? wtPkg : parentPkg),
+      writeFile: mock.fn(async (p, data) => { writtenPkg = data })
+    }
+    const run = mock.fn(async () => ({ pass: true }))
+
+    const ws = createWorkspace('/mock', { fs, fsPromises, run })
+    await ws.syncDependencies('/worktree', '/parent', 'B')
+
+    const result = JSON.parse(writtenPkg)
+    equal(result.dependencies.a, '1') // Old deps
+    equal(result.devDependencies.test, '2') // New devDeps
+    equal(run.mock.callCount(), 1) // Network triggered because dependencies drifted!
+  })
+
+  it('syncDependencies() skips npm install and leverages leeching if hybrid matches parent', async ({ mock }) => {
+    const fs = { existsSync: mock.fn(() => true) }
+    // No drift! Parent and Worktree are identical.
+    const wtPkg = JSON.stringify({ dependencies: { a: '1' }, devDependencies: { test: '1' } })
+    const parentPkg = JSON.stringify({ dependencies: { a: '1' }, devDependencies: { test: '1' } })
+
+    const fsPromises = {
+      readFile: mock.fn(async (p) => p.includes('worktree') ? wtPkg : parentPkg),
+      writeFile: mock.fn(async () => {})
+    }
+    const run = mock.fn()
+
+    const ws = createWorkspace('/mock', { fs, fsPromises, run })
+
+    await ws.syncDependencies('/worktree', '/parent', 'A')
+    await ws.syncDependencies('/worktree', '/parent', 'B')
+
+    // Run was NEVER called! Weaponized leeching active.
+    equal(run.mock.callCount(), 0)
   })
 })

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import { equal } from 'node:assert/strict'
 import { calculateSemanticBump, evaluateMatrix } from '../src/contract.js'
 
-describe('Contract Domain Logic', () => {
+describe('src/contract (domain)', () => {
   describe('calculateSemanticBump()', () => {
     it('returns major when T(old) fails on C(new)', () => {
       equal(calculateSemanticBump({ testOldOnNewPass: false, testNewOnOldPass: true }), 'major')
@@ -19,7 +19,7 @@ describe('Contract Domain Logic', () => {
     it('orchestrates scenarios in parallel and returns correct pass states', async ({ mock }) => {
       const workspace = {
         overlayFiles: mock.fn(async () => {}),
-        installDependencies: mock.fn(async () => {})
+        syncDependencies: mock.fn(async () => ({ stdout: 'installed 2 packages in 100ms' }))
       }
 
       // Scenario A passes (run in wtA), Scenario B fails (run in wtB)
@@ -31,7 +31,7 @@ describe('Contract Domain Logic', () => {
       equal(result.testOldOnNewPass, true)   // Scenario A logic
       equal(result.testNewOnOldPass, false)  // Scenario B logic
       equal(workspace.overlayFiles.mock.callCount(), 2)
-      equal(workspace.installDependencies.mock.callCount(), 2)
+      equal(workspace.syncDependencies.mock.callCount(), 2)
       equal(run.mock.callCount(), 2)
     })
   })

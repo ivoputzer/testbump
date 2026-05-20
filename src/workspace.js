@@ -92,21 +92,51 @@ export const createWorkspace = (cwd, { fs, fsPromises, run }) => {
       return pkg.version || '0.0.1'
     },
 
-    installDependencies: async (targetCwd) => {
-      const pkgPath = join(targetCwd, 'package.json')
-      if (!fs.existsSync(pkgPath)) return { pass: true }
-
-      // --prefer-offline uses the global npm cache to make this lightning fast
-      // --no-audit and --no-fund silence the CLI spam
-      const res = await run('npm install --no-audit --no-fund --prefer-offline', targetCwd, { retries: 2 })
-      if (!res.pass) {
-        throw new Error(`Failed to install dependencies in worktree:\n${res.stderr || res.stdout}`)
-      }
-      return res
-    },
-
     npmVersion: async (version, commitMsg) => {
       return run(`npm version ${version} -m "${commitMsg}" --allow-same-version --force`, cwd)
+    },
+
+    syncDependencies: async (worktreeCwd, parentCwd, scenario) => {
+      const wtPkgPath = join(worktreeCwd, 'package.json')
+      const parentPkgPath = join(parentCwd, 'package.json')
+
+      const wtPkg = fs.existsSync(wtPkgPath) ? JSON.parse(await fsPromises.readFile(wtPkgPath, 'utf8')) : {}
+      const parentPkg = fs.existsSync(parentPkgPath) ? JSON.parse(await fsPromises.readFile(parentPkgPath, 'utf8')) : {}
+
+      const hybridPkg = { ...wtPkg }
+
+      switch (scenario) {
+        // Scenario A (T(old) on C(new)): Code uses New deps, Tests use Old devDeps
+        case 'A':
+          hybridPkg.dependencies = parentPkg.dependencies || {}
+          hybridPkg.devDependencies = wtPkg.devDependencies || {}
+          break
+
+        // Scenario B (T(new) on C(old)): Code uses Old deps, Tests use New devDeps
+        case 'B':
+          hybridPkg.dependencies = wtPkg.dependencies || {}
+          hybridPkg.devDependencies = parentPkg.devDependencies || {}
+          break
+      }
+
+      await fsPromises.writeFile(wtPkgPath, JSON.stringify(hybridPkg, null, 2) + '\n')
+
+      // Recycling:
+      // If our synthesized environment matches the parent exactly, we skip installation.
+      // Node will natively traverse up and use the parent's node_modules!
+      const getDepsStr = (pkg) => JSON.stringify({ d: pkg.dependencies || {}, dev: pkg.devDependencies || {} })
+      const isPerfectMatch = getDepsStr(hybridPkg) === getDepsStr(parentPkg)
+      const parentHasModules = fs.existsSync(join(parentCwd, 'node_modules'))
+
+      if (isPerfectMatch && parentHasModules) return { pass: true } // Zero-latency execution
+
+      // We must drop the lockfile (--no-package-lock) because our synthesized hybrid package.json is a unique timeline fracture that will not match either existing lockfile.
+      const res = await run('npm install --no-package-lock --no-audit --no-fund --prefer-offline', worktreeCwd, { retries: 2 })
+
+      if (!res.pass) {
+        throw new Error(`Failed to install hybrid dependencies in Scenario ${scenario}:\n${res.stderr || res.stdout}`)
+      }
+      return res
     }
   }
 }
