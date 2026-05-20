@@ -291,7 +291,6 @@ describe('e2e/dependencies', () => {
 
       await createModuleCommit(cwd, 'upgraded dependencies')
 
-      console.log(cwd)
       const { stdout, stderr } = await execAsync(`node "${bump}" --verbose`, { cwd, env })
 
       doesNotMatch(stderr, /MODULE_NOT_FOUND/)
