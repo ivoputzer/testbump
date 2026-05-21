@@ -2,6 +2,4 @@
 test/
 doc/
 eslint.config.js
-codecov.SHA256SUM
-codecov.SHA256SUM.sig
 lcov.info
