@@ -37,7 +37,7 @@ npm version $(npx testbump)
 
 Initialize your project automatically
 ```bash
-npx testbump --init
+npx testbump --init # updates package.json .scripts.bump and creates first git tag
 ```
 
 ## Setup
