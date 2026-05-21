@@ -9,7 +9,7 @@
 testbump
 ---
 
-**The tool that tells you if you broke your own contract.**
+**The versioning tool that will tell you if you broke your own contracts.**
 
 `testbump` determines your semantic version based purely on the principle that your **test suite is the versioning contract**. No AST parsing, no complex rules, no dependency hell. Just pure **Test-Driven Bumps (TDB)** using Node and Git.
 
