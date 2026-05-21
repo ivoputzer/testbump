@@ -1,6 +1,6 @@
 {
   "name": "testbump",
-  "description": "The tool that will tell you if you broke your own contract.",
+  "description": "The versioning tool that will tell you if you broke your own contracts.",
   "author": "Ivo von Putzer Reibegg <ivo.putzer@gmail.com> (https://github.com/ivoputzer)",
   "version": "2.0.0",
   "type": "module",
