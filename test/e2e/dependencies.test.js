@@ -3,13 +3,11 @@ import { match, doesNotMatch, equal } from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-
 import { cleanEnvironment, execAsync, createModule, updateModule, updateModuleSource, updateModuleTest, createModuleVersion, createModuleCommit } from '../util.js'
 
-const bump = join(import.meta.dirname, '..', '..', 'bin', 'bump.js')
-
 describe('e2e/dependencies', () => {
-/*
+  const bump = join(import.meta.dirname, '..', '..', 'bin', 'bump.js')
+  /*
   What are we testing?
   ---
   We are verifying the "Dependency Recycling" logic and the "Hybridization" of package.json across Git history.
