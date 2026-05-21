@@ -1,144 +1,69 @@
-import { relative, join, dirname } from 'node:path'
-import { spawn, execSync } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
-import fs, { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { exit } from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
 
-export const run = (command, cwd) => {
-  return new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, stdio: 'pipe' })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', chunk => { stdout += chunk.toString() })
-    child.stderr.on('data', chunk => { stderr += chunk.toString() })
-    child.on('close', code => {
-      resolve({ stdout, stderr, pass: code === 0 })
-    })
-  })
-}
+import { createGit } from './src/git.js'
+import { createWorkspace } from './src/workspace.js'
+import { run } from './src/exec.js'
+import { evaluateMatrix, calculateSemanticBump } from './src/contract.js'
 
-export const getTestCommand = async (cwd) => {
-  const pkgPath = join(cwd, 'package.json')
-  if (!existsSync(pkgPath)) throw new Error('No package.json found.')
-
-  const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
-  if (!pkg.scripts?.test) throw new Error('No "test" script found in package.json.')
-
-  return pkg.scripts.test
-}
-
-export const discoverTestFiles = async (testCmd, cwd, resultsPath, globs = []) => {
-  const reporterPath = fileURLToPath(new URL('./lib/reporter.js', import.meta.url))
-
-  let cmd = `${testCmd} --test-reporter="${reporterPath}" --test-reporter-destination="${resultsPath}"`
-  if (globs.length > 0) {
-    cmd += ' ' + globs.map(g => `"${g}"`).join(' ')
-  }
-
-  await run(cmd, cwd)
-
-  if (!existsSync(resultsPath)) {
-    throw new Error('No test files discovered! Testbump requires at least one test file to form a contract.')
-  }
-
-  const testFiles = JSON.parse(await readFile(resultsPath, 'utf8')).map(p => relative(cwd, p))
-  if (testFiles.length === 0) {
-    throw new Error('No test files discovered! Testbump requires at least one test file to form a contract.')
-  }
-
-  return testFiles
-}
-
-export const getBaselineTag = async (cwd) => {
-  const { pass, stdout } = await run('git describe --tags --abbrev=0', cwd)
-  if (!pass || !stdout.trim()) {
-    throw new Error('No baseline git tag found! Please manually create your first tag (e.g., `git tag 0.0.1`) to establish the baseline contract.')
-  }
-  return stdout.trim()
-}
-
-export function bumpStringFor ({ testOldOnNewPass, testNewOnOldPass }) {
-  if (!testOldOnNewPass) return 'major'
-  if (!testNewOnOldPass) return 'minor'
-  return 'patch'
-}
-
-export async function overlayFiles (files, source, destination, { existsSync, promises: { mkdir, cp } } = fs) {
-  for (const file of files) {
-    const src = join(source, file)
-    const dst = join(destination, file)
-    if (existsSync(src)) {
-      await mkdir(dirname(dst), { recursive: true })
-      await cp(src, dst, { force: true })
-    }
-  }
-}
+const noopLogger = { info: () => {}, error: () => {} }
 
 export const bump = async (cwd, options = {}) => {
-  const worktree = join(cwd, '.bump-worktree')
+  const git = createGit(cwd, { run, execSync })
+  const workspace = createWorkspace(cwd, { fs, fsPromises: fs.promises, run })
+  const logger = options.logger || noopLogger
+
+  const worktreeA = join(cwd, '.bump-worktree-A')
+  const worktreeB = join(cwd, '.bump-worktree-B')
+
   const resultsPath = join(cwd, '.testbump-files.json')
 
-  const log = (...args) => { if (options.verbose) console.error(...args) }
-
   const teardown = () => {
-    try { execSync(`git worktree remove --force "${worktree}"`, { cwd, stdio: 'ignore' }) } catch {}
-    try { fs.rmSync(resultsPath, { force: true }) } catch {}
+    git.removeWorktreeSync(worktreeA)
+    git.removeWorktreeSync(worktreeB)
+    workspace.removeFileSync(resultsPath)
   }
 
-  const handleSignal = () => {
-    teardown()
-    exit(1)
-  }
-
+  const handleSignal = () => { teardown(); exit(1) }
   process.on('SIGINT', handleSignal)
   process.on('SIGTERM', handleSignal)
 
   try {
-    log('[testbump] Execution initiated. Extracting context...')
+    logger.info('[testbump] Execution initiated. Extracting context...')
 
-    const testCmd = await getTestCommand(cwd)
+    const testCmd = await workspace.getTestCommand()
     const globs = options.globs || []
-
-    // Command used for actual scenarios Matrix runs
     const runCmd = globs.length > 0 ? `${testCmd} ` + globs.map(g => `"${g}"`).join(' ') : testCmd
+    logger.info(`[testbump] Executing test script: \`${runCmd}\``)
 
-    log(`[testbump] Executing test script: \`${runCmd}\``)
+    const testFiles = await workspace.discoverContractFiles(testCmd, resultsPath, globs)
+    logger.info(`[testbump] Discovered ${testFiles.length} test file(s) forming the contract.`)
 
-    const testFiles = await discoverTestFiles(testCmd, cwd, resultsPath, globs)
-    log(`[testbump] Discovered ${testFiles.length} test file(s) forming the contract.`)
-
-    const gitFilesResult = await run('git ls-files', cwd)
-    if (!gitFilesResult.pass) throw new Error('Not a git repository.')
-
-    const allFiles = gitFilesResult.stdout.split('\n').filter(Boolean)
+    const allFiles = await git.listFiles()
     const sourceFiles = allFiles.filter(f => !testFiles.includes(f) && f !== 'package.json')
-    log(`[testbump] Categorized ${sourceFiles.length} source file(s) tracking API implementation.`)
+    logger.info(`[testbump] Categorized ${sourceFiles.length} source file(s) tracking API implementation.`)
 
-    const tag = await getBaselineTag(cwd)
-    log(`[testbump] Found baseline tag: ${tag}`)
+    const tag = await git.getLatestTag()
+    if (!tag) {
+      throw new Error('No baseline git tag found! Please manually create your first tag (e.g., `git tag 0.0.1`) to establish the baseline contract.')
+    }
+    logger.info(`[testbump] Found baseline tag: ${tag}`)
 
     teardown()
 
-    const worktreeAdd = await run(`git worktree add "${worktree}" ${tag}`, cwd)
-    if (!worktreeAdd.pass) throw new Error('Failed to create git worktree.')
+    logger.info('[testbump] Creating isolated parallel git worktrees...')
 
-    log('\n[testbump] --- SCENARIO A: T(old) on C(new) ---')
-    await overlayFiles(sourceFiles, cwd, worktree)
-    const testOldOnNew = await run(runCmd, worktree)
-    log(`[testbump] Are old contracts intact? ${testOldOnNew.pass ? '✅ YES' : '❌ NO'}`)
-    if (options.verbose && !testOldOnNew.pass) log(testOldOnNew.stdout || testOldOnNew.stderr)
+    // Create sequentially to prevent git lockfile collisions
+    await git.createWorktree(worktreeA, tag)
+    await git.createWorktree(worktreeB, tag)
 
-    await run('git reset --hard && git clean -fd', worktree)
+    // Execute the matrices in parallel
+    const scenarios = await evaluateMatrix({ workspace, run, logger, cwd, worktreeA, worktreeB, runCmd, sourceFiles, testFiles })
 
-    log('\n[testbump] --- SCENARIO B: T(new) on C(old) ---')
-    await overlayFiles(testFiles, cwd, worktree)
-    const testNewOnOld = await run(runCmd, worktree)
-    log(`[testbump] Are there new test contracts? ${!testNewOnOld.pass ? '✅ YES' : '➖ NO'}`)
-    if (options.verbose && !testNewOnOld.pass) log(testNewOnOld.stdout || testNewOnOld.stderr)
-
-    const bumpStr = bumpStringFor({ testOldOnNewPass: testOldOnNew.pass, testNewOnOldPass: testNewOnOld.pass })
-    log(`\n[testbump] Conclusion: Incrementing as '${bumpStr.toUpperCase()}'.`)
+    const bumpStr = calculateSemanticBump(scenarios)
+    logger.info(`\n[testbump] Conclusion: Incrementing as '${bumpStr.toUpperCase()}'.`)
 
     return bumpStr
   } finally {
@@ -149,43 +74,32 @@ export const bump = async (cwd, options = {}) => {
 }
 
 export const init = async (cwd, options = {}) => {
-  const pkgPath = join(cwd, 'package.json')
-  if (!existsSync(pkgPath)) throw new Error('No package.json found. Please run `npm init` first.')
+  const git = createGit(cwd, { run, execSync })
+  const workspace = createWorkspace(cwd, { fs, fsPromises: fs.promises, run })
 
-  const gitCheck = await run('git status', cwd)
-  if (!gitCheck.pass) throw new Error('Not a git repository. Please run `git init` first.')
+  if (!(await git.isRepository())) {
+    throw new Error('Not a git repository. Please run `git init` first.')
+  }
 
-  const pkg = JSON.parse(await readFile(pkgPath, 'utf8'))
-  pkg.scripts = pkg.scripts || {}
-  pkg.scripts.bump = 'npm version $(npx testbump)'
-
-  // Update package.json on disk
-  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-
+  const v = await workspace.configureBumpScript()
   let message = '[testbump] Successfully configured "bump" script in package.json.\n'
 
-  const tags = await run('git describe --tags --abbrev=0', cwd)
+  const tag = await git.getLatestTag()
 
-  if (!tags.pass || !tags.stdout.trim()) {
-    const v = pkg.version || '0.0.1'
+  if (!tag) {
     const commitMsg = options.message || options.tagMessage || `chore: baseline ${v}`
-
-    // We use --force to tell npm version it's okay that we just modified package.json
-    // This allows it to stage, commit, and tag in one atomic step.
-    const npmRes = await run(`npm version ${v} -m "${commitMsg}" --allow-same-version --force`, cwd)
+    const npmRes = await workspace.npmVersion(v, commitMsg)
 
     if (npmRes.pass) {
-      // Reverted string to match existing E2E test expectations
       message += `[testbump] Created baseline tag: v${v}`
     } else {
-      // Manual Fallback
-      await run('git add package.json', cwd)
-      await run(`git commit -m "${commitMsg}"`, cwd)
-      await run(`git tag v${v} -m "${commitMsg}"`, cwd)
+      await git.add('package.json')
+      await git.commit(commitMsg)
+      await git.createTag(`v${v}`, commitMsg)
       message += `[testbump] Created baseline tag: v${v}`
     }
   } else {
-    message += `[testbump] Baseline tag already exists: ${tags.stdout.trim()}`
+    message += `[testbump] Baseline tag already exists: ${tag}`
   }
 
   return message

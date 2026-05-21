@@ -27,6 +27,7 @@
     "url": "git+https://github.com/ivoputzer/testbump.git"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "neostandard": "^0.13.0"
   }
 }
