@@ -45,7 +45,7 @@ jobs:
             CURRENT_VERSION=$(jq -r .version package.json)
 
             NEXT_VERSION=$(npm version "$BUMP" --no-git-tag-version | cut -c 2-)
-            git restore package.json package-lock.json
+            # git restore package.json package-lock.json
 
             SUMMARY="Based on your test contracts, merging this $CONTEXT will trigger a **$BUMP** release (**$CURRENT_VERSION** → **$NEXT_VERSION**)."
 
