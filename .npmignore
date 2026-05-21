@@ -3,3 +3,4 @@ test/
 doc/
 eslint.config.js
 lcov.info
+*.tgz

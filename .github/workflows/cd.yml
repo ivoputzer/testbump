@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - ".github/**"
 permissions:
   contents: write
   id-token: write # required for provenance signing
@@ -24,14 +26,51 @@ jobs:
         with:
           file: lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: payload check
+        id: gatekeeper
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0)
+          echo "Comparing HEAD against baseline: $LAST_TAG"
+
+          mkdir -p /tmp/pack-old /tmp/pack-new
+
+          # Pack New (Current HEAD)
+          npm pack --pack-destination /tmp/pack-new
+          tar -xzf /tmp/pack-new/*.tgz -C /tmp/pack-new
+
+          # Pack Old (Last Tag)
+          git checkout $LAST_TAG
+          npm pack --pack-destination /tmp/pack-old
+          tar -xzf /tmp/pack-old/*.tgz -C /tmp/pack-old
+
+          # Restore working tree
+          git checkout -
+
+          # Compare the extracted 'package' directories
+          if diff -rq /tmp/pack-old/package /tmp/pack-new/package > /dev/null; then
+            echo "📦 Artifacts are identical. Skipping publish sequence."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "📦 Payload drift detected. Proceeding with release."
+            # Print what actually changed for debugging logs
+            diff -rq /tmp/pack-old/package /tmp/pack-new/package || true
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: npm run bump
+        if: steps.gatekeeper.outputs.skip != 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           npm run bump
           git push --follow-tags
-      - run: npm publish --provenance --access public
-      - name: gh release create
+
+      - if: steps.gatekeeper.outputs.skip != 'true'
+        run: npm publish --provenance --access public
+
+      - if: steps.gatekeeper.outputs.skip != 'true'
+        name: gh release create
         run: |
           VERSION="v$(jq -r .version package.json)"
           TARBALL=$(npm pack)
