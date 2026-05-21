@@ -51,7 +51,7 @@ jobs:
 
             # If this is a PR, automatically add the version label (major/minor/patch)
             if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
-              gh pr edit ${{ github.event.pull_request.number }} --add-label "$BUMP"
+              gh pr edit ${{ github.event.pull_request.number }} --add-label "$BUMP" || echo "Warning: Could not add label. Ensure '$BUMP' exists in Repo Labels."
             fi
           else
             CONCLUSION="failure"
