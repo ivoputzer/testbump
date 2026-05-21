@@ -1,0 +1,20 @@
+changelog:
+  categories:
+    - title: "💥 Breaking Changes"
+      labels:
+        - "breaking"
+        - "major"
+    - title: "🚀 Features"
+      labels:
+        - "enhancement"
+        - "minor"
+    - title: "🩹 Bug Fixes"
+      labels:
+        - "patch"
+        - "bug"
+  exclude:
+    authors:
+      - dependabot[bot]
+    labels:
+      - "dependencies" # Keeps the notes clean if you don't want dependabot noise
+      - skip-notes
