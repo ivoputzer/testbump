@@ -1,50 +1,40 @@
 name: CD / Auto-Publish
 on:
-  pull_request:
   push:
     branches:
       - main
-
 permissions:
   contents: write
   id-token: write # required for provenance signing
-
 jobs:
-  publish:
+  test-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: true
           fetch-depth: 0 # required for bump to work
-
       - uses: actions/setup-node@v6
         with:
           node-version: lts/*
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-
-      - run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-
       - run: npm run test -- --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=lcov.info
-
-      - uses: codecov/codecov-action@v5
-        with:
-          files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - uses: coverallsapp/github-action@v2
         with:
           file: lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - if: github.ref == 'refs/heads/main'
-        run: npm run bump
-
-      - if: github.ref == 'refs/heads/main'
-        run: git push --follow-tags
-
-      - if: github.ref == 'refs/heads/main'
-        run: npm publish --provenance --access public
+      - name: npm run bump
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          npm run bump
+          git push --follow-tags
+      - run: npm publish --provenance --access public
+      - name: gh release create
+        run: |
+          VERSION="v$(jq -r .version package.json)"
+          TARBALL=$(npm pack)
+          gh release create "$VERSION" "$TARBALL" --title "$VERSION" --latest --generate-notes --verify-tag --discussion-category "General"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
