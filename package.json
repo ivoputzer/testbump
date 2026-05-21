@@ -2,7 +2,7 @@
   "name": "testbump",
   "description": "The versioning tool that will tell you if you broke your own contracts.",
   "author": "Ivo von Putzer Reibegg <ivo.putzer@gmail.com> (https://github.com/ivoputzer)",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "main": "index.js",
   "bin": {
