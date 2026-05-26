@@ -3,7 +3,7 @@
 [![style](https://img.shields.io/badge/coding%20style-standard-brightgreen.svg?style=flat-square&colorB=44CC11)](http://standardjs.com)
 [![coverage](https://img.shields.io/coveralls/ivoputzer/testbump.svg?style=flat-square&colorB=44CC11)](https://coveralls.io/github/ivoputzer/testbump?branch=master)
 [![version](https://img.shields.io/npm/v/testbump.svg?label=version&style=flat-square&colorB=007EC6)](https://www.npmjs.com/package/testbump)
-[![node](https://img.shields.io/node/v/testbump?style=flat-square&colorB=007EC6)](https://nodejs.org/docs/v22.3.0/api)
+[![node](https://img.shields.io/node/v/testbump?style=flat-square&colorB=007EC6)](https://nodejs.org/docs/v22.16.0/api)
 [![license](https://img.shields.io/npm/l/testbump.svg?style=flat-square&colorB=007EC6)](https://spdx.org/licenses/WTFNMFPL)
 
 testbump
