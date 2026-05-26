@@ -40,7 +40,7 @@ test('user missing', () => equal(fetchUser().status, 'Not Found'))
 // HEAD Code
 export const fetchUser = () => ({ status: 'User Not Found' })
 ```
-*You might think this is a patch. `testbump` runs the v1.0.0 test against your HEAD code. It fails. `testbump` bumps you to `v2.0.0`. You broke the contract.*
+*You might think this is a patch. `testbump` runs the `v1.0.0` test against your HEAD code. **It fails**. `testbump` bumps you to `v2.0.0`. You broke the contract.*
 
 ## Usage
 Run it in your CI or locally to get the next version bump
@@ -94,7 +94,7 @@ const nextVersion = await bump(cwd(), {
 })
 ```
 
-## GitHub Actions (Eat Your Own Dogfood)
+## GitHub Actions
 We use `testbump` to version `testbump`. It is completely automated. Feel free to copy our GitHub Actions to completely remove human versioning from your repositories:
 
 **1. The PR Preview Bot ([ci.yml](.github/workflows/ci.yml))**
