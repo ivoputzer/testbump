@@ -97,11 +97,11 @@ const nextVersion = await bump(cwd(), {
 ## Documentation
 Dive deeper into the architecture, philosophy, and advanced mechanics of `testbump`:
 * [Test-Driven Bumps (TDB) & Versioning Philosophy](doc/versioning.md)
-* [CLI Reference](doc/cli.md)
-* [Programmatic API](doc/api.md)
-* [Git Worktrees & Parallel Execution](doc/worktrees.md)
 * [Dependency Hybridization](doc/hybridization.md)
 * [Dependency Recycling & Performance](doc/recycling.md)
+* [Git Worktrees & Parallel Execution](doc/worktrees.md)
+* [Programmatic API](doc/api.md)
+* [CLI Reference](doc/cli.md)
 
 ## Requirements
 * Git
