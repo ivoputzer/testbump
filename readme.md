@@ -94,6 +94,17 @@ const nextVersion = await bump(cwd(), {
 })
 ```
 
+## GitHub Actions (Eat Your Own Dogfood)
+We use `testbump` to version `testbump`. It is completely automated. Feel free to copy our GitHub Actions to completely remove human versioning from your repositories:
+
+**1. The PR Preview Bot ([ci.yml](.github/workflows/ci.yml))**
+On every Pull Request, our CI runs the `testbump` matrix and dynamically calculates the future version. It uses the GitHub API to create a custom Check Run showing exactly what the bump will be (🔴 MAJOR, 🟠 MINOR, or 🟢 PATCH) and automatically adds the corresponding label to the PR.
+
+**2. The Gatekeeper Auto-Release ([cd.yml](.github/workflows/cd.yml))**
+On push to `main`, the CD pipeline creates two `npm pack` tarballs (one for the current `HEAD` and one for the last Git Tag). It diffs the raw payloads.
+* If nothing changed (e.g., just a .npmignore'd update), it exits.
+* If the artifact drifted, it runs `npm run bump`, pushes the new Git tag, publishes to NPM with provenance, and creates a GitHub Release.
+
 ## Documentation
 Dive deeper into the architecture, philosophy, and advanced mechanics of `testbump`:
 * [Test-Driven Bumps (TDB) & Versioning Philosophy](doc/versioning.md)
