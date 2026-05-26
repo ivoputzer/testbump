@@ -23,6 +23,24 @@ Let **old** = Last Git Tag, **new** = Current HEAD.
 
 🩹 **PATCH (Fix):** `T(old)` passes on `C(new)` AND `T(new)` passes on `C(old)`. *(Old contracts are intact, and no new code surface was tested).*
 
+## How it Works (Under the Hood)
+`testbump` doesn't parse ASTs or guess your intentions. It uses **Git Worktrees** to time-travel.
+It creates hidden, parallel worktrees of your last tagged release and physically overlays your new code. It dynamically synthesizes a hybrid `package.json` to ensure your new code gets its new dependencies, while your old tests get their historical testing frameworks. Then, it runs the matrix.
+
+### Example: The Unintentional Breaking Change
+```javascript
+// v1.0.0 Code
+export const fetchUser = () => ({ status: 'Not Found' })
+
+// v1.0.0 Test
+test('user missing', () => equal(fetchUser().status, 'Not Found'))
+
+// --- You refactor for v2 ---
+
+// HEAD Code
+export const fetchUser = () => ({ status: 'User Not Found' })
+```
+*You might think this is a patch. `testbump` runs the v1.0.0 test against your HEAD code. It fails. `testbump` bumps you to `v2.0.0`. You broke the contract.*
 
 ## Usage
 Run it in your CI or locally to get the next version bump
